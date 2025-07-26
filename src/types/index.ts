@@ -33,6 +33,11 @@ export interface WeeklyTimeData {
   }[];
 }
 
+export interface WeeklyTarget {
+  hours: number;
+  minutes: number;
+}
+
 export interface ApiError {
   message: string;
   status?: number;

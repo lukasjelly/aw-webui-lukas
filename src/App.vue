@@ -3,13 +3,16 @@ import { ref, onMounted } from 'vue';
 import WeekView from './components/WeekView.vue';
 import HoursSummary from './components/HoursSummary.vue';
 import AwServerApi from './services/awServerApi';
-import type { WeeklyTimeData } from './types';
+import type { WeeklyTimeData, WeeklyTarget } from './types';
 
 const api = new AwServerApi();
 const timeData = ref<WeeklyTimeData | undefined>();
 const loading = ref(false);
 const error = ref<string>('');
 const connectionStatus = ref<'connected' | 'disconnected' | 'checking'>('checking');
+
+// Default target: 38 hours and 20 minutes per week (configurable)
+const weeklyTarget: WeeklyTarget = { hours: 38, minutes: 20 };
 
 // Calculate current week (Wednesday to Tuesday)
 const getCurrentWeek = (): { start: Date; end: Date } => {
@@ -127,6 +130,7 @@ onMounted(() => {
         :time-data="timeData"
         :loading="loading"
         :error="error"
+        :target="weeklyTarget"
         @retry="retryLoad"
       />
     </main>

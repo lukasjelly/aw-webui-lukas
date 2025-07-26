@@ -77,16 +77,12 @@ class AwServerApi {
       const dailyBreakdown: { date: string; hours: number }[] = [];
       const currentDate = new Date(start);
       
-      console.log('Week start date:', start.toDateString(), 'Day of week:', start.getDay());
-      
       // Ensure we start from Wednesday and go through Tuesday (7 days)
       for (let i = 0; i < 7; i++) {
         const dayStart = new Date(currentDate);
         dayStart.setHours(0, 0, 0, 0);
         const dayEnd = new Date(currentDate);
         dayEnd.setHours(23, 59, 59, 999);
-
-        console.log(`Day ${i}: ${currentDate.toDateString()} (${currentDate.getDay()})`);
 
         const dayEvents = activeEvents.filter(event => {
           const eventDate = new Date(event.timestamp);
@@ -117,8 +113,6 @@ class AwServerApi {
         const localDateString = currentDate.getFullYear() + '-' + 
           String(currentDate.getMonth() + 1).padStart(2, '0') + '-' + 
           String(currentDate.getDate()).padStart(2, '0');
-
-        console.log('Adding day:', currentDate.toDateString(), 'as string:', localDateString);
 
         dailyBreakdown.push({
           date: localDateString,
