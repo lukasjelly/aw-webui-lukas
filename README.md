@@ -33,6 +33,71 @@ A modern Vue 3 application for visualizing ActivityWatch time tracking data. Thi
    ```bash
    npm run build
    ```
+   
+
+## Using your main install's data
+
+If you want to actively iterate on `aw-webui-lukas` with your local production data (with your production server running), you have several options:
+
+### Option 1: Build directly to ActivityWatch static folder (Recommended)
+Use Vite's native build commands that automatically detect your ActivityWatch installation.
+**Warning: This will overwrite any existing files in the ActivityWatch static folder, so ensure you have backups if needed.**
+
+```bash
+# One-time build to ActivityWatch static folder
+npm run build:aw
+
+# Watch mode - automatically rebuilds when files change (using Vite's optimized watch)
+npm run build:aw-watch
+```
+
+### Option 2: Development server with hot reload
+For active development with live updates and instant feedback:
+
+```bash
+npm run dev
+```
+
+Then access at `http://localhost:5173` (Vite's default port). This uses Vite's development server with proxy configuration for seamless ActivityWatch API integration.
+
+### Option 3: Build with watch mode to default output
+For continuous builds to the standard `dist` folder:
+
+```bash
+# Watch mode to dist folder
+npm run build:watch
+```
+
+### Option 4: Custom build location
+For non-standard ActivityWatch installations, use Vite's build command directly:
+
+```bash
+# One-time build to custom path
+npx vite build --outDir="C:\path\to\your\activitywatch\static\folder"
+
+# Watch mode to custom path
+npx vite build --watch --outDir="C:\path\to\your\activitywatch\static\folder"
+```
+
+### Option 5: Standard production build
+For regular production builds:
+
+```bash
+npm run build
+```
+
+**Note**: After building to the ActivityWatch static folder, restart ActivityWatch to see your changes in the main ActivityWatch web interface.
+
+
+## Available Scripts
+
+- `npm run dev` - Start Vite development server with hot module replacement
+- `npm run build` - Build for production with TypeScript compilation
+- `npm run preview` - Preview production build locally using Vite
+- `npm run build:watch` - Build with Vite's watch mode for continuous compilation
+- `npm run build:aw` - Build directly to ActivityWatch static folder
+- `npm run build:aw-watch` - Watch mode build to ActivityWatch static folder
+
 
 ## Configuration
 

@@ -12,7 +12,7 @@ const error = ref<string>('');
 const connectionStatus = ref<'connected' | 'disconnected' | 'checking'>('checking');
 
 // Default target: 38 hours and 20 minutes per week (configurable)
-const weeklyTarget: WeeklyTarget = { hours: 38, minutes: 20 };
+const weeklyTarget: WeeklyTarget = { hours: 34, minutes: 10 };
 
 // Calculate current week (Wednesday to Tuesday)
 const getCurrentWeek = (): { start: Date; end: Date } => {
@@ -107,7 +107,7 @@ onMounted(() => {
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>ActivityWatch Dashboard</h1>
+      <h1>Work Hours Tracker Dashboard</h1>
       <p>Track your weekly computer usage and stay productive</p>
       <div class="connection-status" :class="connectionStatus">
         <span class="status-indicator"></span>

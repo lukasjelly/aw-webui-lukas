@@ -80,7 +80,7 @@ interface Emits {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  target: () => ({ hours: 38, minutes: 20 })
+  target: () => ({ hours: 34, minutes: 10 })
 });
 defineEmits<Emits>();
 

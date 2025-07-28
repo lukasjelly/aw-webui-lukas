@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "build:watch": "vite build --watch",
+    "build:aw": "vite build --outDir=\"%LOCALAPPDATA%\\Programs\\ActivityWatch\\aw-server\\aw_server\\static\"",
+    "build:aw-watch": "vite build --watch --outDir=\"%LOCALAPPDATA%\\Programs\\ActivityWatch\\aw-server\\aw_server\\static\""
   },
   "dependencies": {
     "vue": "^3.5.17"
