@@ -58,6 +58,15 @@
           </div>
         </div>
       </div>
+      
+      <!-- Auto-refresh status -->
+      <div v-if="lastUpdateTime" class="auto-refresh-status">
+        <div class="last-updated">
+          <span class="update-icon" @click="handleManualRefresh" title="Click to refresh now">🔄</span>
+          <span class="update-text">Last updated: {{ formatLastUpdateTime(lastUpdateTime) }}</span>
+          <span class="auto-refresh-indicator">• Auto-refreshing every 30 seconds</span>
+        </div>
+      </div>
     </div>
 
     <div v-else class="no-data">
@@ -67,7 +76,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import type { WeeklyTimeData, WeeklyTarget } from '../types';
 
 interface Props {
@@ -75,17 +84,23 @@ interface Props {
   loading?: boolean;
   error?: string;
   target?: WeeklyTarget;
+  lastUpdateTime?: Date | null;
 }
 
 interface Emits {
   (e: 'retry'): void;
   (e: 'open-timeline', date: string): void;
+  (e: 'manual-refresh'): void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   target: () => ({ hours: 34, minutes: 10 })
 });
 const emit = defineEmits<Emits>();
+
+// Reactive timer for updating "time ago" display
+const currentTime = ref(new Date());
+const timeUpdateInterval = ref<number | null>(null);
 
 const maxHours = computed(() => {
   if (!props.timeData?.dailyBreakdown) return 8;
@@ -187,9 +202,53 @@ const formatHoursMinutes = (hours: number): string => {
   }
 };
 
+const formatLastUpdateTime = (updateTime: Date): string => {
+  const now = currentTime.value;
+  const diffMs = now.getTime() - updateTime.getTime();
+  const diffSeconds = Math.floor(diffMs / 1000);
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  const diffHours = Math.floor(diffMinutes / 60);
+  const diffDays = Math.floor(diffHours / 24);
+  
+  if (diffSeconds < 10) {
+    return 'just now';
+  } else if (diffSeconds < 60) {
+    return `${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
+  } else if (diffMinutes < 60) {
+    return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+  } else if (diffHours < 24) {
+    return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  } else if (diffDays < 7) {
+    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+  } else {
+    return updateTime.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  }
+};
+
 const openTimeline = (dateStr: string) => {
   emit('open-timeline', dateStr);
 };
+
+const handleManualRefresh = () => {
+  emit('manual-refresh');
+};
+
+// Update current time every 30 seconds to keep "time ago" display fresh
+onMounted(() => {
+  timeUpdateInterval.value = setInterval(() => {
+    currentTime.value = new Date();
+  }, 30000);
+});
+
+onUnmounted(() => {
+  if (timeUpdateInterval.value) {
+    clearInterval(timeUpdateInterval.value);
+  }
+});
 </script>
 
 <style scoped>
@@ -418,6 +477,50 @@ const openTimeline = (dateStr: string) => {
   color: #7f8c8d;
 }
 
+.auto-refresh-status {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ecf0f1;
+}
+
+.last-updated {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #7f8c8d;
+}
+
+.update-icon {
+  font-size: 0.9rem;
+  animation: rotate 2s linear infinite;
+  transition: transform 0.3s ease;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.update-icon:hover {
+  transform: scale(1.1);
+  background: rgba(52, 152, 219, 0.1);
+}
+
+.update-text {
+  color: #5a6c7d;
+}
+
+.auto-refresh-indicator {
+  color: #95a5a6;
+  font-style: italic;
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 @media (max-width: 600px) {
   .daily-grid {
     gap: 0.5rem;
@@ -438,6 +541,16 @@ const openTimeline = (dateStr: string) => {
   
   .hours-display {
     font-size: 2rem;
+  }
+  
+  .last-updated {
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8rem;
+  }
+  
+  .auto-refresh-indicator {
+    font-size: 0.75rem;
   }
 }
 </style>

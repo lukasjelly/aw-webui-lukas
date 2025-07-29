@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import WeekView from './components/WeekView.vue';
 import HoursSummary from './components/HoursSummary.vue';
 import TimelineModal from './components/TimelineModal.vue';
@@ -11,6 +11,11 @@ const timeData = ref<WeeklyTimeData | undefined>();
 const loading = ref(false);
 const error = ref<string>('');
 const connectionStatus = ref<'connected' | 'disconnected' | 'checking'>('checking');
+
+// Auto-refresh settings
+const autoRefreshInterval = ref<number | null>(null);
+const refreshIntervalMinutes = 0.5; // Refresh every 2 minutes
+const lastUpdateTime = ref<Date | null>(null);
 
 // Timeline modal state
 const isTimelineModalOpen = ref(false);
@@ -65,8 +70,11 @@ const getCurrentWeek = (): { start: Date; end: Date } => {
 
 const currentWeek = ref(getCurrentWeek());
 
-const loadTimeData = async () => {
-  loading.value = true;
+const loadTimeData = async (isAutoRefresh = false) => {
+  // Don't show loading spinner for auto-refresh to avoid UI flickering
+  if (!isAutoRefresh) {
+    loading.value = true;
+  }
   error.value = '';
   
   try {
@@ -84,6 +92,7 @@ const loadTimeData = async () => {
       currentWeek.value.start,
       currentWeek.value.end
     );
+    lastUpdateTime.value = new Date();
   } catch (err) {
     if (connectionStatus.value !== 'disconnected') {
       connectionStatus.value = 'disconnected';
@@ -91,7 +100,9 @@ const loadTimeData = async () => {
     error.value = err instanceof Error ? err.message : 'An unknown error occurred';
     timeData.value = undefined;
   } finally {
-    loading.value = false;
+    if (!isAutoRefresh) {
+      loading.value = false;
+    }
   }
 };
 
@@ -102,6 +113,28 @@ const onWeekChanged = (start: Date, end: Date) => {
 
 const retryLoad = () => {
   loadTimeData();
+};
+
+const startAutoRefresh = () => {
+  // Clear existing interval if any
+  if (autoRefreshInterval.value) {
+    clearInterval(autoRefreshInterval.value);
+  }
+  
+  // Set up new interval (convert minutes to milliseconds)
+  autoRefreshInterval.value = setInterval(() => {
+    // Only auto-refresh if connected and not in loading state
+    if (connectionStatus.value === 'connected' && !loading.value) {
+      loadTimeData(true);
+    }
+  }, refreshIntervalMinutes * 60 * 1000);
+};
+
+const stopAutoRefresh = () => {
+  if (autoRefreshInterval.value) {
+    clearInterval(autoRefreshInterval.value);
+    autoRefreshInterval.value = null;
+  }
 };
 
 const openTimeline = (dateStr: string) => {
@@ -116,6 +149,11 @@ const closeTimelineModal = () => {
 
 onMounted(() => {
   loadTimeData();
+  startAutoRefresh();
+});
+
+onUnmounted(() => {
+  stopAutoRefresh();
 });
 </script>
 
@@ -146,8 +184,10 @@ onMounted(() => {
         :loading="loading"
         :error="error"
         :target="weeklyTarget"
+        :last-update-time="lastUpdateTime"
         @retry="retryLoad"
         @open-timeline="openTimeline"
+        @manual-refresh="retryLoad"
       />
     </main>
     
