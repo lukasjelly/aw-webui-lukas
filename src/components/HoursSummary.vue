@@ -14,7 +14,7 @@
     <div v-else-if="timeData" class="summary-content">
       <div class="total-hours">
         <h3>Total Hours This Week</h3>
-        <div class="hours-display">{{ timeData.totalHours }}h</div>
+        <div class="hours-display">{{ formatHoursMinutes(timeData.totalHours) }}</div>
         
         <div class="target-progress">
           <div class="target-info">
@@ -54,7 +54,7 @@
                 :style="{ height: `${getBarHeight(day.hours)}%` }"
               ></div>
             </div>
-            <div class="day-hours">{{ day.hours }}h</div>
+            <div class="day-hours">{{ formatHoursMinutes(day.hours) }}</div>
           </div>
         </div>
       </div>
@@ -170,6 +170,21 @@ const formatDayName = (dateStr: string): string => {
 const formatDayDate = (dateStr: string): string => {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+};
+
+const formatHoursMinutes = (hours: number): string => {
+  const wholeHours = Math.floor(hours);
+  const minutes = Math.round((hours - wholeHours) * 60);
+  
+  if (wholeHours === 0 && minutes === 0) {
+    return '0h 0m';
+  } else if (wholeHours === 0) {
+    return `${minutes}m`;
+  } else if (minutes === 0) {
+    return `${wholeHours}h`;
+  } else {
+    return `${wholeHours}h ${minutes}m`;
+  }
 };
 
 const openTimeline = (dateStr: string) => {

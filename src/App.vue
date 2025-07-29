@@ -122,13 +122,13 @@ onMounted(() => {
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>Work Hours Tracker Dashboard</h1>
+      <h1>Work Hours Tracker</h1>
       <p>Track your weekly computer usage and stay productive</p>
       <div class="connection-status" :class="connectionStatus">
         <span class="status-indicator"></span>
         <span class="status-text">
-          {{ connectionStatus === 'connected' ? 'Connected to ActivityWatch' : 
-             connectionStatus === 'disconnected' ? 'Disconnected from ActivityWatch' : 
+          {{ connectionStatus === 'connected' ? 'Connected to ActivityWatch Server' : 
+             connectionStatus === 'disconnected' ? 'Disconnected from ActivityWatch Server' : 
              'Checking connection...' }}
         </span>
       </div>
