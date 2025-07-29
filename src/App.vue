@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue';
 import WeekView from './components/WeekView.vue';
 import HoursSummary from './components/HoursSummary.vue';
+import TimelineModal from './components/TimelineModal.vue';
 import AwServerApi from './services/awServerApi';
 import type { WeeklyTimeData, WeeklyTarget } from './types';
 
@@ -10,6 +11,10 @@ const timeData = ref<WeeklyTimeData | undefined>();
 const loading = ref(false);
 const error = ref<string>('');
 const connectionStatus = ref<'connected' | 'disconnected' | 'checking'>('checking');
+
+// Timeline modal state
+const isTimelineModalOpen = ref(false);
+const selectedDate = ref<Date | null>(null);
 
 // Default target: 38 hours and 20 minutes per week (configurable)
 const weeklyTarget: WeeklyTarget = { hours: 34, minutes: 10 };
@@ -99,6 +104,16 @@ const retryLoad = () => {
   loadTimeData();
 };
 
+const openTimeline = (dateStr: string) => {
+  selectedDate.value = new Date(dateStr);
+  isTimelineModalOpen.value = true;
+};
+
+const closeTimelineModal = () => {
+  isTimelineModalOpen.value = false;
+  selectedDate.value = null;
+};
+
 onMounted(() => {
   loadTimeData();
 });
@@ -132,12 +147,20 @@ onMounted(() => {
         :error="error"
         :target="weeklyTarget"
         @retry="retryLoad"
+        @open-timeline="openTimeline"
       />
     </main>
     
     <footer class="app-footer">
       <p>Powered by ActivityWatch • Built with Vue 3</p>
     </footer>
+    
+    <!-- Timeline Modal -->
+    <TimelineModal 
+      :is-open="isTimelineModalOpen"
+      :selected-date="selectedDate"
+      @close="closeTimelineModal"
+    />
   </div>
 </template>
 

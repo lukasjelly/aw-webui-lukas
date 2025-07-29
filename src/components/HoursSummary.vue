@@ -35,12 +35,14 @@
       </div>
 
       <div class="daily-breakdown">
-        <h4>Daily Breakdown</h4>
+        <h4>Daily Breakdown <span class="clickable-hint">(Click on any day for timeline)</span></h4>
         <div class="daily-grid">
           <div 
             v-for="day in timeData.dailyBreakdown" 
             :key="day.date"
             class="day-item"
+            @click="openTimeline(day.date)"
+            :title="`Click to view timeline for ${formatDayName(day.date)}, ${formatDayDate(day.date)}`"
           >
             <div class="day-info">
               <div class="day-name">{{ formatDayName(day.date) }}</div>
@@ -77,12 +79,13 @@ interface Props {
 
 interface Emits {
   (e: 'retry'): void;
+  (e: 'open-timeline', date: string): void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   target: () => ({ hours: 34, minutes: 10 })
 });
-defineEmits<Emits>();
+const emit = defineEmits<Emits>();
 
 const maxHours = computed(() => {
   if (!props.timeData?.dailyBreakdown) return 8;
@@ -167,6 +170,10 @@ const formatDayName = (dateStr: string): string => {
 const formatDayDate = (dateStr: string): string => {
   const date = new Date(dateStr);
   return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+};
+
+const openTimeline = (dateStr: string) => {
+  emit('open-timeline', dateStr);
 };
 </script>
 
@@ -311,6 +318,13 @@ const formatDayDate = (dateStr: string): string => {
   font-size: 1.1rem;
 }
 
+.clickable-hint {
+  font-size: 0.8rem;
+  color: #666;
+  font-weight: 400;
+  font-style: italic;
+}
+
 .daily-grid {
   display: flex;
   gap: 1rem;
@@ -325,6 +339,19 @@ const formatDayDate = (dateStr: string): string => {
   align-items: center;
   flex: 1;
   gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.day-item:hover {
+  background: rgba(52, 152, 219, 0.1);
+  transform: translateY(-2px);
+}
+
+.day-item:active {
+  transform: translateY(0);
 }
 
 .day-info {

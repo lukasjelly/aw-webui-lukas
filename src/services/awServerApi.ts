@@ -55,6 +55,123 @@ class AwServerApi {
     );
   }
 
+  async getDayTimelineData(date: Date): Promise<{
+    totalActiveSeconds: number;
+    totalInactiveSeconds: number;
+    events: Array<{
+      start: Date;
+      end: Date;
+      duration: number;
+      type: 'active' | 'inactive';
+    }>;
+  }> {
+    try {
+      const buckets = await this.getBuckets();
+      const afkBucket = buckets.find(bucket => bucket.type === 'afkstatus');
+
+      if (!afkBucket) {
+        throw new Error('Required AFK bucket not found. Make sure ActivityWatch is running.');
+      }
+
+      // Set day boundaries
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      // Get AFK events for the day
+      const afkEvents = await this.getEvents(afkBucket.id, dayStart, dayEnd);
+
+      // Filter for active periods only
+      const activeEvents = afkEvents.filter(event => event.data.status === 'not-afk');
+
+      if (activeEvents.length === 0) {
+        return {
+          totalActiveSeconds: 0,
+          totalInactiveSeconds: 0,
+          events: []
+        };
+      }
+
+      // Calculate total active time and collect active periods
+      let totalActiveSeconds = 0;
+      const activePeriods: Array<{ start: Date; end: Date; duration: number }> = [];
+
+      activeEvents.forEach(event => {
+        const eventStart = new Date(event.timestamp);
+        const eventEnd = new Date(eventStart.getTime() + event.duration * 1000);
+        
+        // Calculate the overlap duration with the day
+        const overlapStart = eventStart > dayStart ? eventStart : dayStart;
+        const overlapEnd = eventEnd < dayEnd ? eventEnd : dayEnd;
+        
+        if (overlapStart < overlapEnd) {
+          const overlapDuration = (overlapEnd.getTime() - overlapStart.getTime()) / 1000;
+          totalActiveSeconds += overlapDuration;
+          
+          activePeriods.push({
+            start: overlapStart,
+            end: overlapEnd,
+            duration: overlapDuration
+          });
+        }
+      });
+
+      // Sort active periods by start time
+      activePeriods.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+      // Find first active time
+      const firstActiveTime = activePeriods[0].start;
+
+      // Create combined timeline with active and inactive periods
+      const timelineEvents: Array<{
+        start: Date;
+        end: Date;
+        duration: number;
+        type: 'active' | 'inactive';
+      }> = [];
+
+      let totalInactiveSeconds = 0;
+      let currentTime = firstActiveTime;
+
+      for (const activePeriod of activePeriods) {
+        // Add inactive period if there's a gap before this active period
+        if (currentTime < activePeriod.start) {
+          const inactiveDuration = (activePeriod.start.getTime() - currentTime.getTime()) / 1000;
+          totalInactiveSeconds += inactiveDuration;
+          
+          timelineEvents.push({
+            start: new Date(currentTime),
+            end: new Date(activePeriod.start),
+            duration: inactiveDuration,
+            type: 'inactive'
+          });
+        }
+
+        // Add the active period
+        timelineEvents.push({
+          start: activePeriod.start,
+          end: activePeriod.end,
+          duration: activePeriod.duration,
+          type: 'active'
+        });
+
+        currentTime = activePeriod.end;
+      }
+
+      return {
+        totalActiveSeconds,
+        totalInactiveSeconds,
+        events: timelineEvents
+      };
+    } catch (error) {
+      if (error instanceof Error) {
+        throw new ApiError(error.message);
+      }
+      throw new ApiError('Failed to fetch day timeline data');
+    }
+  }
+
   async getWeeklyTimeData(start: Date, end: Date): Promise<WeeklyTimeData> {
     try {
       const buckets = await this.getBuckets();
