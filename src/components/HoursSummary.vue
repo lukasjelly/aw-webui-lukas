@@ -4,7 +4,7 @@
       <div class="spinner"></div>
       <span>Loading time data...</span>
     </div>
-    
+
     <div v-else-if="error" class="error">
       <h3>⚠️ Error</h3>
       <p>{{ error }}</p>
@@ -15,7 +15,7 @@
       <div class="total-hours">
         <h3>Total Hours This Week</h3>
         <div class="hours-display">{{ formatHoursMinutes(timeData.totalHours) }}</div>
-        
+
         <div class="target-progress">
           <div class="target-info">
             <span class="target-label">Target: {{ targetDisplayText }}</span>
@@ -24,11 +24,8 @@
             </span>
           </div>
           <div class="progress-bar">
-            <div 
-              class="progress-fill"
-              :style="{ width: `${progressPercentage}%` }"
-              :class="{ 'exceeded': hasExceededTarget }"
-            ></div>
+            <div class="progress-fill" :style="{ width: `${progressPercentage}%` }"
+              :class="{ 'exceeded': hasExceededTarget }"></div>
           </div>
           <div class="progress-percentage">{{ Math.round(progressPercentage) }}%</div>
         </div>
@@ -37,34 +34,17 @@
       <div class="daily-breakdown">
         <h4>Daily Breakdown <span class="clickable-hint">(Click on any day for timeline)</span></h4>
         <div class="daily-grid">
-          <div 
-            v-for="day in timeData.dailyBreakdown" 
-            :key="day.date"
-            class="day-item"
-            @click="openTimeline(day.date)"
-            :title="`Click to view timeline for ${formatDayName(day.date)}, ${formatDayDate(day.date)}`"
-          >
+          <div v-for="day in timeData.dailyBreakdown" :key="day.date" class="day-item" @click="openTimeline(day.date)"
+            :title="`Click to view timeline for ${formatDayName(day.date)}, ${formatDayDate(day.date)}`">
             <div class="day-info">
               <div class="day-name">{{ formatDayName(day.date) }}</div>
               <div class="day-date">{{ formatDayDate(day.date) }}</div>
             </div>
             <div class="hours-bar">
-              <div 
-                class="hours-fill"
-                :style="{ height: `${getBarHeight(day.hours)}%` }"
-              ></div>
+              <div class="hours-fill" :style="{ height: `${getBarHeight(day.hours)}%` }"></div>
             </div>
             <div class="day-hours">{{ formatHoursMinutes(day.hours) }}</div>
           </div>
-        </div>
-      </div>
-      
-      <!-- Auto-refresh status -->
-      <div v-if="lastUpdateTime" class="auto-refresh-status">
-        <div class="last-updated">
-          <span class="update-icon" @click="handleManualRefresh" title="Click to refresh now">🔄</span>
-          <span class="update-text">Last updated: {{ formatLastUpdateTime(lastUpdateTime) }}</span>
-          <span class="auto-refresh-indicator">• Auto-refreshing every 30 seconds</span>
         </div>
       </div>
     </div>
@@ -76,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed } from 'vue';
 import type { WeeklyTimeData, WeeklyTarget } from '../types';
 
 interface Props {
@@ -98,10 +78,6 @@ const props = withDefaults(defineProps<Props>(), {
 });
 const emit = defineEmits<Emits>();
 
-// Reactive timer for updating "time ago" display
-const currentTime = ref(new Date());
-const timeUpdateInterval = ref<number | null>(null);
-
 const maxHours = computed(() => {
   if (!props.timeData?.dailyBreakdown) return 8;
   return Math.max(...props.timeData.dailyBreakdown.map(d => d.hours), 8);
@@ -114,7 +90,7 @@ const targetTotalHours = computed(() => {
 const targetDisplayText = computed(() => {
   const hours = props.target.hours;
   const minutes = props.target.minutes;
-  
+
   if (minutes === 0) {
     return `${hours}h`;
   } else {
@@ -139,19 +115,19 @@ const remainingHours = computed(() => {
 
 const remainingText = computed(() => {
   if (!props.timeData) return `${targetTotalHours.value.toFixed(1)}h remaining`;
-  
+
   if (hasExceededTarget.value) {
     const excess = props.timeData.totalHours - targetTotalHours.value;
     return `+${excess.toFixed(1)}h over target!`;
   }
-  
+
   if (remainingHours.value === 0) {
     return 'Target achieved!';
   }
-  
+
   const hours = Math.floor(remainingHours.value);
   const minutes = Math.round((remainingHours.value - hours) * 60);
-  
+
   if (hours === 0) {
     return `${minutes}min remaining`;
   } else if (minutes === 0) {
@@ -163,7 +139,7 @@ const remainingText = computed(() => {
 
 const remainingClass = computed(() => {
   if (!props.timeData) return '';
-  
+
   if (hasExceededTarget.value) {
     return 'exceeded';
   } else if (remainingHours.value === 0) {
@@ -190,7 +166,7 @@ const formatDayDate = (dateStr: string): string => {
 const formatHoursMinutes = (hours: number): string => {
   const wholeHours = Math.floor(hours);
   const minutes = Math.round((hours - wholeHours) * 60);
-  
+
   if (wholeHours === 0 && minutes === 0) {
     return '0h 0m';
   } else if (wholeHours === 0) {
@@ -202,53 +178,9 @@ const formatHoursMinutes = (hours: number): string => {
   }
 };
 
-const formatLastUpdateTime = (updateTime: Date): string => {
-  const now = currentTime.value;
-  const diffMs = now.getTime() - updateTime.getTime();
-  const diffSeconds = Math.floor(diffMs / 1000);
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  const diffHours = Math.floor(diffMinutes / 60);
-  const diffDays = Math.floor(diffHours / 24);
-  
-  if (diffSeconds < 10) {
-    return 'just now';
-  } else if (diffSeconds < 60) {
-    return `${diffSeconds} second${diffSeconds === 1 ? '' : 's'} ago`;
-  } else if (diffMinutes < 60) {
-    return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
-  } else if (diffHours < 24) {
-    return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
-  } else if (diffDays < 7) {
-    return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
-  } else {
-    return updateTime.toLocaleTimeString('en-US', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  }
-};
-
 const openTimeline = (dateStr: string) => {
   emit('open-timeline', dateStr);
 };
-
-const handleManualRefresh = () => {
-  emit('manual-refresh');
-};
-
-// Update current time every 30 seconds to keep "time ago" display fresh
-onMounted(() => {
-  timeUpdateInterval.value = setInterval(() => {
-    currentTime.value = new Date();
-  }, 30000);
-});
-
-onUnmounted(() => {
-  if (timeUpdateInterval.value) {
-    clearInterval(timeUpdateInterval.value);
-  }
-});
 </script>
 
 <style scoped>
@@ -278,8 +210,13 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .error {
@@ -517,38 +454,43 @@ onUnmounted(() => {
 }
 
 @keyframes rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @media (max-width: 600px) {
   .daily-grid {
     gap: 0.5rem;
   }
-  
+
   .day-name {
     font-size: 0.8rem;
   }
-  
+
   .day-date {
     font-size: 0.7rem;
   }
-  
+
   .hours-bar {
     width: 16px;
     height: 50px;
   }
-  
+
   .hours-display {
     font-size: 2rem;
   }
-  
+
   .last-updated {
     flex-direction: column;
     gap: 0.25rem;
     font-size: 0.8rem;
   }
-  
+
   .auto-refresh-indicator {
     font-size: 0.75rem;
   }
