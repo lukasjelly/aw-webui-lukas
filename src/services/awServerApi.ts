@@ -101,13 +101,17 @@ class AwServerApi {
         const eventStart = new Date(event.timestamp);
         const eventEnd = new Date(eventStart.getTime() + event.duration * 1000);
         
+        // Skip zero-duration events
+        if (event.duration <= 0) {
+          return;
+        }
+        
         // Calculate the overlap duration with the day
         const overlapStart = eventStart > dayStart ? eventStart : dayStart;
         const overlapEnd = eventEnd < dayEnd ? eventEnd : dayEnd;
         
         if (overlapStart < overlapEnd) {
           const overlapDuration = (overlapEnd.getTime() - overlapStart.getTime()) / 1000;
-          totalActiveSeconds += overlapDuration;
           
           activePeriods.push({
             start: overlapStart,
@@ -120,8 +124,40 @@ class AwServerApi {
       // Sort active periods by start time
       activePeriods.sort((a, b) => a.start.getTime() - b.start.getTime());
 
+      // Merge overlapping or adjacent active periods
+      const mergedPeriods: Array<{ start: Date; end: Date; duration: number }> = [];
+      
+      for (const period of activePeriods) {
+        if (mergedPeriods.length === 0) {
+          mergedPeriods.push(period);
+        } else {
+          const lastPeriod = mergedPeriods[mergedPeriods.length - 1];
+          
+          // Check if current period overlaps or is adjacent to the last period (within 1 second)
+          if (period.start.getTime() <= lastPeriod.end.getTime() + 1000) {
+            // Merge periods
+            const mergedEnd = period.end > lastPeriod.end ? period.end : lastPeriod.end;
+            lastPeriod.end = mergedEnd;
+            lastPeriod.duration = (mergedEnd.getTime() - lastPeriod.start.getTime()) / 1000;
+          } else {
+            mergedPeriods.push(period);
+          }
+        }
+      }
+
+      // Calculate total active seconds from merged periods
+      totalActiveSeconds = mergedPeriods.reduce((sum, period) => sum + period.duration, 0);
+
+      if (mergedPeriods.length === 0) {
+        return {
+          totalActiveSeconds: 0,
+          totalInactiveSeconds: 0,
+          events: []
+        };
+      }
+
       // Find first active time
-      const firstActiveTime = activePeriods[0].start;
+      const firstActiveTime = mergedPeriods[0].start;
 
       // Create combined timeline with active and inactive periods
       const timelineEvents: Array<{
@@ -134,7 +170,7 @@ class AwServerApi {
       let totalInactiveSeconds = 0;
       let currentTime = firstActiveTime;
 
-      for (const activePeriod of activePeriods) {
+      for (const activePeriod of mergedPeriods) {
         // Add inactive period if there's a gap before this active period
         if (currentTime < activePeriod.start) {
           const inactiveDuration = (activePeriod.start.getTime() - currentTime.getTime()) / 1000;

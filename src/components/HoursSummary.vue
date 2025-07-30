@@ -41,9 +41,17 @@
               <div class="day-date">{{ formatDayDate(day.date) }}</div>
             </div>
             <div class="hours-bar">
-              <div class="hours-fill" :style="{ height: `${getBarHeight(day.hours)}%` }"></div>
+              <div class="hours-fill" 
+                   :style="{ height: `${getBarHeight(day.hours, day.date)}%` }"
+                   :class="{ 'target-met': isDailyTargetMet(day.hours, day.date), 'below-target': !isDailyTargetMet(day.hours, day.date) }"></div>
             </div>
-            <div class="day-hours">{{ formatHoursMinutes(day.hours) }}</div>
+            <div class="day-hours" :class="{ 'target-met': isDailyTargetMet(day.hours, day.date), 'below-target': !isDailyTargetMet(day.hours, day.date) }">
+              {{ formatHoursMinutes(day.hours) }}
+              <div class="day-target">
+                <span v-if="!isWeekend(day.date)">Target: {{ getDailyTargetText(day.date) }}</span>
+                <span v-else>&nbsp;</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -149,8 +157,38 @@ const remainingClass = computed(() => {
   }
 });
 
-const getBarHeight = (hours: number): number => {
-  return (hours / maxHours.value) * 100;
+const dailyTargetHours = computed(() => {
+  return targetTotalHours.value / 5; // Divide weekly target by 5 workdays
+});
+
+const getBarHeight = (hours: number, dateStr: string): number => {
+  if (isWeekend(dateStr)) {
+    // For weekends, use the max hours across all days for scaling
+    return (hours / maxHours.value) * 100;
+  } else {
+    // For weekdays, show progress against daily target
+    return Math.min((hours / dailyTargetHours.value) * 100, 100);
+  }
+};
+
+const isDailyTargetMet = (hours: number, dateStr: string): boolean => {
+  if (isWeekend(dateStr)) {
+    return true; // Weekends are always "met" since no target
+  }
+  return hours >= dailyTargetHours.value;
+};
+
+const isWeekend = (dateStr: string): boolean => {
+  const date = new Date(dateStr);
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
+};
+
+const getDailyTargetText = (dateStr: string): string => {
+  if (isWeekend(dateStr)) {
+    return ''; // No target for weekends
+  }
+  return formatHoursMinutes(dailyTargetHours.value);
 };
 
 const formatDayName = (dateStr: string): string => {
@@ -385,9 +423,23 @@ const openTimeline = (dateStr: string) => {
 
 .day-hours {
   font-weight: 600;
-  color: #27ae60;
   font-size: 0.9rem;
   margin-top: 0.5rem;
+}
+
+.day-hours.target-met {
+  color: #27ae60; /* Green when target is met */
+}
+
+.day-hours.below-target {
+  color: #f39c12; /* Orange when below target */
+}
+
+.day-target {
+  font-size: 0.75rem;
+  color: #95a5a6;
+  font-weight: 400;
+  margin-top: 0.25rem;
 }
 
 .hours-bar {
@@ -403,9 +455,16 @@ const openTimeline = (dateStr: string) => {
 
 .hours-fill {
   width: 100%;
-  background: linear-gradient(0deg, #27ae60, #2ecc71);
   transition: height 0.5s ease;
   border-radius: 0 0 4px 4px;
+}
+
+.hours-fill.target-met {
+  background: linear-gradient(0deg, #27ae60, #2ecc71); /* Green when target is met */
+}
+
+.hours-fill.below-target {
+  background: linear-gradient(0deg, #f39c12, #e67e22); /* Orange when below target */
 }
 
 .no-data {
