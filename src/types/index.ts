@@ -38,6 +38,21 @@ export interface WeeklyTarget {
   minutes: number;
 }
 
+export type DistributionMode = 'equal' | 'custom';
+
+export interface DailyTarget {
+  day: string; // 'monday', 'tuesday', etc.
+  hours: number;
+}
+
+export interface DailyTargetsConfig {
+  mode: DistributionMode;
+  customTargets: Record<string, number>; // { monday: 7, tuesday: 6.5, etc. }
+  weeklyTarget: number;
+  lockedDays: Record<string, boolean>; // { monday: true, tuesday: false, etc. }
+  lastModified: Date;
+}
+
 export interface ApiError {
   message: string;
   status?: number;

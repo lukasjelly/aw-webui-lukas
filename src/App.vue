@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import WeekView from './components/WeekView.vue';
 import HoursSummary from './components/HoursSummary.vue';
 import TimelineModal from './components/TimelineModal.vue';
+import TargetSettings from './components/TargetSettings.vue';
 import AwServerApi from './services/awServerApi';
+import { useDailyTargets } from './composables/useDailyTargets';
 import type { WeeklyTimeData, WeeklyTarget } from './types';
 
 const api = new AwServerApi();
@@ -11,6 +13,17 @@ const timeData = ref<WeeklyTimeData | undefined>();
 const loading = ref(false);
 const error = ref<string>('');
 const connectionStatus = ref<'connected' | 'disconnected' | 'checking'>('checking');
+
+// Get the weekly target from the composable
+const { weeklyTarget: composableWeeklyTarget } = useDailyTargets();
+
+// Convert composable target to the format expected by HoursSummary
+const weeklyTarget = computed<WeeklyTarget>(() => {
+  const totalHours = composableWeeklyTarget.value;
+  const hours = Math.floor(totalHours);
+  const minutes = Math.round((totalHours - hours) * 60);
+  return { hours, minutes };
+});
 
 // Auto-refresh settings
 const autoRefreshInterval = ref<number | null>(null);
@@ -21,8 +34,8 @@ const lastUpdateTime = ref<Date | null>(null);
 const isTimelineModalOpen = ref(false);
 const selectedDate = ref<Date | null>(null);
 
-// Default target: 38 hours and 20 minutes per week (configurable)
-const weeklyTarget: WeeklyTarget = { hours: 34, minutes: 10 };
+// Settings modal state
+const isSettingsModalOpen = ref(false);
 
 // Calculate current week (Wednesday to Tuesday)
 const getCurrentWeek = (): { start: Date; end: Date } => {
@@ -147,6 +160,14 @@ const closeTimelineModal = () => {
   selectedDate.value = null;
 };
 
+const openSettings = () => {
+  isSettingsModalOpen.value = true;
+};
+
+const closeSettings = () => {
+  isSettingsModalOpen.value = false;
+};
+
 onMounted(() => {
   loadTimeData();
   startAutoRefresh();
@@ -160,7 +181,12 @@ onUnmounted(() => {
 <template>
   <div class="app">
     <header class="app-header">
-      <h1>Work Hours Tracker</h1>
+      <div class="header-top">
+        <h1>Work Hours Tracker</h1>
+        <button @click="openSettings" class="settings-btn" title="Configure Daily Targets">
+          ⚙️ Settings
+        </button>
+      </div>
       <p>Track your weekly computer usage and stay productive</p>
       <div class="connection-status" :class="connectionStatus">
         <span class="status-indicator"></span>
@@ -201,6 +227,17 @@ onUnmounted(() => {
       :selected-date="selectedDate"
       @close="closeTimelineModal"
     />
+
+    <!-- Settings Modal -->
+    <div v-if="isSettingsModalOpen" class="modal-overlay" @click="closeSettings">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h2>Settings</h2>
+          <button @click="closeSettings" class="close-btn">✕</button>
+        </div>
+        <TargetSettings />
+      </div>
+    </div>
   </div>
 </template>
 
@@ -217,6 +254,32 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.settings-btn {
+  padding: 0.5rem 1rem;
+  border: 2px solid #007bff;
+  border-radius: 6px;
+  background: white;
+  color: #007bff;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+}
+
+.settings-btn:hover {
+  background: #007bff;
+  color: white;
+  transform: translateY(-1px);
 }
 
 .app-header h1 {
@@ -296,5 +359,65 @@ onUnmounted(() => {
   .app-main {
     padding: 1rem;
   }
+
+  .header-top {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  max-width: 700px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 1.5rem 0;
+  border-bottom: 1px solid #e9ecef;
+  margin-bottom: 1rem;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #6c757d;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: #f8f9fa;
+  color: #495057;
 }
 </style>

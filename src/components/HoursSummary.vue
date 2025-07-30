@@ -66,6 +66,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { WeeklyTimeData, WeeklyTarget } from '../types';
+import { useDailyTargets } from '../composables/useDailyTargets';
 
 interface Props {
   timeData?: WeeklyTimeData;
@@ -86,13 +87,17 @@ const props = withDefaults(defineProps<Props>(), {
 });
 const emit = defineEmits<Emits>();
 
+// Initialize daily targets composable
+const { getDailyTargetForDate: getComposableDailyTarget, weeklyTarget } = useDailyTargets();
+
 const maxHours = computed(() => {
   if (!props.timeData?.dailyBreakdown) return 8;
   return Math.max(...props.timeData.dailyBreakdown.map(d => d.hours), 8);
 });
 
 const targetTotalHours = computed(() => {
-  return props.target.hours + (props.target.minutes / 60);
+  // Use the weekly target from the composable if available, otherwise fall back to props
+  return weeklyTarget.value || (props.target.hours + (props.target.minutes / 60));
 });
 
 const targetDisplayText = computed(() => {
@@ -161,13 +166,19 @@ const dailyTargetHours = computed(() => {
   return targetTotalHours.value / 5; // Divide weekly target by 5 workdays
 });
 
+const getDailyTargetForDate = (dateStr: string): number => {
+  // Use the composable's method if available, otherwise use equal distribution
+  return getComposableDailyTarget(dateStr) || dailyTargetHours.value;
+};
+
 const getBarHeight = (hours: number, dateStr: string): number => {
   if (isWeekend(dateStr)) {
     // For weekends, use the max hours across all days for scaling
     return (hours / maxHours.value) * 100;
   } else {
-    // For weekdays, show progress against daily target
-    return Math.min((hours / dailyTargetHours.value) * 100, 100);
+    // For weekdays, show progress against daily target from composable
+    const dailyTarget = getDailyTargetForDate(dateStr);
+    return Math.min((hours / dailyTarget) * 100, 100);
   }
 };
 
@@ -175,7 +186,8 @@ const isDailyTargetMet = (hours: number, dateStr: string): boolean => {
   if (isWeekend(dateStr)) {
     return true; // Weekends are always "met" since no target
   }
-  return hours >= dailyTargetHours.value;
+  const dailyTarget = getDailyTargetForDate(dateStr);
+  return hours >= dailyTarget;
 };
 
 const isWeekend = (dateStr: string): boolean => {
@@ -188,7 +200,8 @@ const getDailyTargetText = (dateStr: string): string => {
   if (isWeekend(dateStr)) {
     return ''; // No target for weekends
   }
-  return formatHoursMinutes(dailyTargetHours.value);
+  const dailyTarget = getDailyTargetForDate(dateStr);
+  return formatHoursMinutes(dailyTarget);
 };
 
 const formatDayName = (dateStr: string): string => {
