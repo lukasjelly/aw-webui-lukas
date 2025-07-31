@@ -68,17 +68,17 @@
         <button @click="applyPreset('balanced')" class="preset-btn">
           Balanced
         </button>
+        <button @click="setFromLogged" class="preset-btn logged-preset" 
+                :disabled="!props.timeData || !hasLoggedTime" 
+                title="Set targets based on actual logged time (only for days with logged hours)">
+          📊 From Logged
+        </button>
       </div>
     </div>
 
     <!-- Weekly Distribution (only show in custom mode) -->
     <div v-if="mode === 'custom'" class="section">
-      <div class="section-title">
-        Weekly Distribution
-        <button @click="autoBalance" class="balance-btn" title="Auto-balance to meet weekly target">
-          ⚖️ Balance
-        </button>
-      </div>
+      <div class="section-title">Weekly Distribution</div>
       
       <!-- Interactive distribution chart -->
       <div class="interactive-distribution">
@@ -131,7 +131,7 @@
           <li>Changes auto-save to your browser</li>
           <li>Custom mode allows precise daily control</li>
           <li>Click the lock 🔓/🔒 to prevent a day from changing</li>
-          <li>Balance button adjusts only unlocked days</li>
+          <li>"Set from Logged" copies your actual tracked hours as targets</li>
           <li>Use presets for common patterns</li>
         </ul>
       </div>
@@ -141,6 +141,14 @@
 
 <script setup lang="ts">
 import { useDailyTargets } from '../composables/useDailyTargets';
+import type { WeeklyTimeData } from '../types';
+import { computed } from 'vue';
+
+interface Props {
+  timeData?: WeeklyTimeData;
+}
+
+const props = defineProps<Props>();
 
 const {
   dailyTargets,
@@ -149,7 +157,7 @@ const {
   weeklyTotal,
   isWeeklyTargetMet,
   updateDayTarget: updateDayTargetRaw,
-  autoBalance,
+  setFromLoggedData,
   setMode,
   setWeeklyTarget,
   applyPreset,
@@ -158,6 +166,12 @@ const {
 } = useDailyTargets();
 
 const workdays = ['wednesday', 'thursday', 'friday', 'monday', 'tuesday'];
+
+// Check if there's any logged time data available
+const hasLoggedTime = computed(() => {
+  if (!props.timeData?.dailyBreakdown) return false;
+  return props.timeData.dailyBreakdown.some(day => day.hours > 0);
+});
 
 // Helper functions for time formatting
 function formatHoursMinutes(decimalHours: number): string {
@@ -232,6 +246,13 @@ function handleBarClick(day: string, event: MouseEvent) {
 function getBarHeight(value: number): number {
   const maxTarget = Math.max(8, Math.max(...Object.values(dailyTargets.value)));
   return Math.min(100, (value / maxTarget) * 100);
+}
+
+// Set targets from logged data
+function setFromLogged() {
+  if (props.timeData) {
+    setFromLoggedData(props.timeData);
+  }
 }
 </script>
 
@@ -408,20 +429,48 @@ function getBarHeight(value: number): number {
   color: #007bff;
 }
 
-.balance-btn {
+.preset-btn.logged-preset {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  color: white;
+  border-color: #007bff;
+}
+
+.preset-btn.logged-preset:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0056b3, #004085);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
+}
+
+.preset-btn.logged-preset:disabled {
+  background: #6c757d;
+  border-color: #6c757d;
+  color: white;
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.logged-btn {
   padding: 0.25rem 0.75rem;
-  border: 1px solid #28a745;
+  border: 1px solid #007bff;
   border-radius: 4px;
-  background: #28a745;
+  background: #007bff;
   color: white;
   font-size: 0.875rem;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
-.balance-btn:hover {
-  background: #218838;
+.logged-btn:hover:not(:disabled) {
+  background: #0056b3;
   transform: translateY(-1px);
+}
+
+.logged-btn:disabled {
+  background: #6c757d;
+  border-color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .daily-inputs {

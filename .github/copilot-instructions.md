@@ -16,6 +16,8 @@ This is a Vue 3 + TypeScript application built with Vite for displaying Activity
 - Follow Vue.js best practices for component structure and reactivity
 - Use modern ES6+ features and async/await for API calls
 - Ensure responsive design for different screen sizes
+- Once the coding tasks are complete, do not output a summary or explanation of the code changes
+- Do not genenrate documentation unless explicitly requested
 
 ## API Integration
 - Connect to ActivityWatch server (typically running on localhost:5600)

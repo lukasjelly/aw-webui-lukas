@@ -235,7 +235,7 @@ onUnmounted(() => {
           <h2>Settings</h2>
           <button @click="closeSettings" class="close-btn">✕</button>
         </div>
-        <TargetSettings />
+        <TargetSettings :time-data="timeData" />
       </div>
     </div>
   </div>
