@@ -10,18 +10,6 @@
       </div>
     </div>
 
-    <!-- Weekly Target Input -->
-    <div class="section">
-      <div class="section-title">Weekly Target</div>
-      <div class="time-stepper-group">
-        <button @click="decreaseWeeklyTarget" class="stepper-btn" :disabled="weeklyTarget <= (5 / 60)">−</button>
-        <div class="time-display">
-          {{ formatHoursMinutes(weeklyTarget) }}
-        </div>
-        <button @click="increaseWeeklyTarget" class="stepper-btn">+</button>
-      </div>
-    </div>
-
     <!-- Distribution Mode -->
     <div class="section">
 
@@ -112,7 +100,6 @@ const {
   isWeeklyTargetMet,
   updateDayTarget: updateDayTargetRaw,
   setFromLoggedData,
-  setWeeklyTarget,
   applyEqualPreset,
   toggleLock,
   isLocked,
@@ -135,16 +122,6 @@ function formatHoursMinutes(decimalHours: number): string {
 
 function formatDayName(day: string): string {
   return day.charAt(0).toUpperCase() + day.slice(1);
-}
-
-// Weekly target stepper functions (5-minute intervals = 5/60 hours = 0.0833... hours)
-function increaseWeeklyTarget() {
-  setWeeklyTarget(weeklyTarget.value + (5 / 60));
-}
-
-function decreaseWeeklyTarget() {
-  const newValue = Math.max((5 / 60), weeklyTarget.value - (5 / 60));
-  setWeeklyTarget(newValue);
 }
 
 // Daily target stepper functions (5-minute intervals = 5/60 hours = 0.0833... hours)

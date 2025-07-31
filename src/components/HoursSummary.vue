@@ -18,7 +18,11 @@
 
         <div class="target-progress">
           <div class="target-info">
-            <span class="target-label">Target: {{ targetDisplayText }}</span>
+            <div class="target-stepper">
+              <button @click="decreaseWeeklyTarget" class="target-stepper-btn" :disabled="weeklyTarget <= (5 / 60)">−</button>
+              <span class="target-label">Target: {{ targetDisplayText }}</span>
+              <button @click="increaseWeeklyTarget" class="target-stepper-btn">+</button>
+            </div>
             <span class="remaining-label" :class="remainingClass">
               {{ remainingText }}
             </span>
@@ -88,7 +92,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>();
 
 // Initialize daily targets composable
-const { getDailyTargetForDate: getComposableDailyTarget, weeklyTarget } = useDailyTargets();
+const { getDailyTargetForDate: getComposableDailyTarget, weeklyTarget, setWeeklyTarget } = useDailyTargets();
 
 const maxHours = computed(() => {
   if (!props.timeData?.dailyBreakdown) return 8;
@@ -101,8 +105,9 @@ const targetTotalHours = computed(() => {
 });
 
 const targetDisplayText = computed(() => {
-  const hours = props.target.hours;
-  const minutes = props.target.minutes;
+  const totalHours = weeklyTarget.value;
+  const hours = Math.floor(totalHours);
+  const minutes = Math.round((totalHours - hours) * 60);
 
   if (minutes === 0) {
     return `${hours}h`;
@@ -235,6 +240,16 @@ const formatHoursMinutes = (hours: number): string => {
 const openTimeline = (dateStr: string) => {
   emit('open-timeline', dateStr);
 };
+
+// Weekly target stepper functions (5-minute intervals = 5/60 hours = 0.0833... hours)
+const increaseWeeklyTarget = () => {
+  setWeeklyTarget(weeklyTarget.value + (5 / 60));
+};
+
+const decreaseWeeklyTarget = () => {
+  const newValue = Math.max((5 / 60), weeklyTarget.value - (5 / 60));
+  setWeeklyTarget(newValue);
+};
 </script>
 
 <style scoped>
@@ -330,6 +345,41 @@ const openTimeline = (dateStr: string) => {
   align-items: center;
   margin-bottom: 0.5rem;
   font-size: 0.9rem;
+}
+
+.target-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.target-stepper-btn {
+  width: 24px;
+  height: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.target-stepper-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+.target-stepper-btn:disabled {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.5);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .target-label {
