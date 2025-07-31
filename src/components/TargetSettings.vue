@@ -24,31 +24,17 @@
 
     <!-- Distribution Mode -->
     <div class="section">
-      <div class="section-title">Daily Target Distribution</div>
-      <div class="mode-info">
-        <p>All daily targets are now customizable. Use the presets below for quick setup, or adjust individual days
-          manually.</p>
-      </div>
 
       <!-- Quick Presets (only show in custom mode) -->
       <div v-if="mode === 'custom'" class="section">
         <div class="section-title">Quick Presets</div>
         <div class="preset-buttons">
-          <button @click="applyPreset('equal')" class="preset-btn">
+          <button @click="applyEqualPreset()" class="preset-btn">
             Equal
           </button>
-          <button @click="applyPreset('frontLoaded')" class="preset-btn">
-            Front-loaded
-          </button>
-          <button @click="applyPreset('backLoaded')" class="preset-btn">
-            Back-loaded
-          </button>
-          <button @click="applyPreset('balanced')" class="preset-btn">
-            Balanced
-          </button>
-          <button @click="setFromLogged" class="preset-btn logged-preset" :disabled="!props.timeData || !hasLoggedTime"
-            title="Set targets based on actual logged time (only for days with logged hours)">
-            📊 From Logged
+          <button @click="setFromLogged" class="preset-btn" :disabled="!props.timeData || !hasLoggedTime"
+            title="Set targets based on actual logged time and distribute remaining hours">
+            From Logged
           </button>
         </div>
       </div>
@@ -98,8 +84,8 @@
             <li>Changes auto-save to your browser</li>
             <li>Custom mode allows precise daily control</li>
             <li>Click the lock 🔓/🔒 to prevent a day from changing</li>
-            <li>"Set from Logged" copies your actual tracked hours as targets</li>
-            <li>Use presets for common patterns</li>
+            <li>"From Logged" uses your tracked hours and distributes remaining time</li>
+            <li>"Equal" distributes target hours evenly across unlocked days</li>
           </ul>
         </div>
       </div>
@@ -127,7 +113,7 @@ const {
   updateDayTarget: updateDayTargetRaw,
   setFromLoggedData,
   setWeeklyTarget,
-  applyPreset,
+  applyEqualPreset,
   toggleLock,
   isLocked,
 } = useDailyTargets();
@@ -384,7 +370,7 @@ function setFromLogged() {
 
 .preset-buttons {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 0.75rem;
 }
 
@@ -402,27 +388,6 @@ function setFromLogged() {
   border-color: #007bff;
   background: #f8f9fa;
   color: #007bff;
-}
-
-.preset-btn.logged-preset {
-  background: linear-gradient(135deg, #007bff, #0056b3);
-  color: white;
-  border-color: #007bff;
-}
-
-.preset-btn.logged-preset:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0056b3, #004085);
-  color: white;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 123, 255, 0.3);
-}
-
-.preset-btn.logged-preset:disabled {
-  background: #6c757d;
-  border-color: #6c757d;
-  color: white;
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .logged-btn {
@@ -578,7 +543,7 @@ function setFromLogged() {
   }
 
   .preset-buttons {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: 1fr;
   }
 
   .preview-bars {

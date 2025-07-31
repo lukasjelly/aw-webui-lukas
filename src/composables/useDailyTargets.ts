@@ -125,28 +125,70 @@ class DailyTargetsManager {
     this.config.value.customTargets = currentTargets;
   }
 
-  // Auto-set targets based on logged time data
+  // Auto-set targets based on logged time data and distribute remaining hours
   setFromLoggedData(weeklyTimeData: any) {
     const currentTargets = { ...this.config.value.customTargets };
     const lockedDays = this.config.value.lockedDays || {};
     
+    // Track logged hours and updated days, including locked days for total calculation
+    let totalAccountedHours = 0;
+    const updatedDays: string[] = [];
+    const loggedHours: Record<string, number> = {};
+    
     // Convert dates to day names and get logged hours
     if (weeklyTimeData?.dailyBreakdown) {
       weeklyTimeData.dailyBreakdown.forEach((dayData: {date: string, hours: number}) => {
-        // Only process days that have actual logged time (more than 0 hours)
-        if (dayData.hours <= 0) return;
-        
         const date = new Date(dayData.date);
         const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
         const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
         const dayName = dayNames[dayOfWeek];
         
-        // Only update workdays that aren't locked and have logged time
-        if (WORKDAYS.includes(dayName) && !lockedDays[dayName]) {
-          // Round to nearest 5-minute increment and ensure minimum
-          const roundedHours = Math.max(5/60, Math.round(dayData.hours * 12) / 12);
-          currentTargets[dayName] = roundedHours;
+        // Track all workday logged hours, even if 0
+        if (WORKDAYS.includes(dayName)) {
+          loggedHours[dayName] = dayData.hours;
+          
+          if (lockedDays[dayName]) {
+            // For locked days, include their current target in total accounted hours
+            totalAccountedHours += currentTargets[dayName] || 0;
+          } else if (dayData.hours > 0) {
+            // Only update unlocked days that have actual logged time
+            // Use exact logged hours, just ensure minimum of 5 minutes
+            const exactHours = Math.max(5/60, dayData.hours);
+            currentTargets[dayName] = exactHours;
+            totalAccountedHours += exactHours;
+            updatedDays.push(dayName);
+          }
         }
+      });
+    }
+    
+    // Account for locked days that don't have logged data
+    WORKDAYS.forEach(day => {
+      if (lockedDays[day] && !(day in loggedHours)) {
+        // This locked day has no data in the current week, include its current target
+        totalAccountedHours += currentTargets[day] || 0;
+      }
+    });
+    
+    // Calculate remaining hours to distribute
+    const remainingTarget = this.config.value.weeklyTarget - totalAccountedHours;
+    
+    // Get days that weren't updated (no logged time, not locked) and are unlocked
+    const remainingDays = WORKDAYS.filter(day => 
+      !updatedDays.includes(day) && !lockedDays[day]
+    );
+    
+    // Distribute remaining hours among days without logged time and unlocked
+    if (remainingDays.length > 0 && remainingTarget > 0) {
+      const hoursPerRemainingDay = Math.max(5/60, remainingTarget / remainingDays.length);
+      
+      remainingDays.forEach(day => {
+        currentTargets[day] = Math.round(hoursPerRemainingDay * 12) / 12; // Round to 5-minute increments
+      });
+    } else if (remainingDays.length > 0) {
+      // If no remaining target, set to minimum
+      remainingDays.forEach(day => {
+        currentTargets[day] = 5/60; // Minimum 5 minutes
       });
     }
 
@@ -225,8 +267,8 @@ class DailyTargetsManager {
     });
   }
 
-  // Preset distributions
-  applyPreset(preset: 'equal' | 'frontLoaded' | 'backLoaded' | 'balanced') {
+  // Apply equal distribution preset
+  applyEqualPreset() {
     const currentTargets = { ...this.config.value.customTargets };
     const lockedDays = this.config.value.lockedDays || {};
     
@@ -245,47 +287,6 @@ class DailyTargetsManager {
     // If all days are locked, can't apply preset
     if (unlockedDays.length === 0) return;
     
-    // Get preset pattern for unlocked days only
-    let presetTargets: Record<string, number>;
-    
-    switch (preset) {
-      case 'frontLoaded':
-        presetTargets = {
-          monday: 8,
-          tuesday: 8, 
-          wednesday: 7,
-          thursday: 6,
-          friday: 5.17
-        };
-        break;
-      case 'backLoaded':
-        presetTargets = {
-          monday: 5.17,
-          tuesday: 6,
-          wednesday: 7,
-          thursday: 8,
-          friday: 8
-        };
-        break;
-      case 'balanced':
-        presetTargets = {
-          monday: 7,
-          tuesday: 7,
-          wednesday: 6.17, // Lighter Wednesday
-          thursday: 7,
-          friday: 7
-        };
-        break;
-      default: // equal
-        // Create equal distribution inline
-        const equalShare = this.config.value.weeklyTarget / WORKDAYS.length;
-        presetTargets = WORKDAYS.reduce((acc, day) => {
-          acc[day] = equalShare;
-          return acc;
-        }, {} as Record<string, number>);
-        break;
-    }
-
     // Calculate remaining target after accounting for locked days
     const remainingTarget = this.config.value.weeklyTarget - lockedTotal;
     
@@ -295,24 +296,11 @@ class DailyTargetsManager {
         currentTargets[day] = 5/60; // Minimum 5 minutes
       });
     } else {
-      // Get preset total for unlocked days only
-      const unlockedPresetTotal = unlockedDays.reduce((sum, day) => sum + (presetTargets[day] || 0), 0);
-      
-      if (unlockedPresetTotal > 0) {
-        // Scale preset pattern to fit remaining target
-        const scaleFactor = remainingTarget / unlockedPresetTotal;
-        
-        unlockedDays.forEach(day => {
-          const scaledValue = (presetTargets[day] || 0) * scaleFactor;
-          currentTargets[day] = Math.max(5/60, scaledValue); // Ensure minimum
-        });
-      } else {
-        // Fallback: distribute equally among unlocked days
-        const equalShare = remainingTarget / unlockedDays.length;
-        unlockedDays.forEach(day => {
-          currentTargets[day] = Math.max(5/60, equalShare);
-        });
-      }
+      // Distribute equally among unlocked days
+      const equalShare = remainingTarget / unlockedDays.length;
+      unlockedDays.forEach(day => {
+        currentTargets[day] = Math.max(5/60, equalShare);
+      });
     }
 
     this.config.value.mode = 'custom';
@@ -355,7 +343,7 @@ export function useDailyTargets() {
     setMode: (mode: DistributionMode) => dailyTargetsManager.setMode(mode),
     setWeeklyTarget: (hours: number) => dailyTargetsManager.setWeeklyTarget(hours),
     getDailyTargetForDate: (dateStr: string) => dailyTargetsManager.getDailyTargetForDate(dateStr),
-    applyPreset: (preset: 'equal' | 'frontLoaded' | 'backLoaded' | 'balanced') => dailyTargetsManager.applyPreset(preset),
+    applyEqualPreset: () => dailyTargetsManager.applyEqualPreset(),
     isLocked: (day: string) => dailyTargetsManager.isLocked(day),
     toggleLock: (day: string) => dailyTargetsManager.toggleLock(day),
   };
