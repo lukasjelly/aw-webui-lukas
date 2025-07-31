@@ -38,7 +38,7 @@ export interface WeeklyTarget {
   minutes: number;
 }
 
-export type DistributionMode = 'equal' | 'custom';
+export type DistributionMode = 'custom';
 
 export interface DailyTarget {
   day: string; // 'monday', 'tuesday', etc.

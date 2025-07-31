@@ -187,7 +187,10 @@ const isDailyTargetMet = (hours: number, dateStr: string): boolean => {
     return true; // Weekends are always "met" since no target
   }
   const dailyTarget = getDailyTargetForDate(dateStr);
-  return hours >= dailyTarget;
+  // Round both values to 3 decimal places to handle floating-point precision issues
+  const roundedHours = Math.round(hours * 1000) / 1000;
+  const roundedTarget = Math.round(dailyTarget * 1000) / 1000;
+  return roundedHours >= roundedTarget;
 };
 
 const isWeekend = (dateStr: string): boolean => {

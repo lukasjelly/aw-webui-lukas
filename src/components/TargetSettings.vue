@@ -14,7 +14,7 @@
     <div class="section">
       <div class="section-title">Weekly Target</div>
       <div class="time-stepper-group">
-        <button @click="decreaseWeeklyTarget" class="stepper-btn" :disabled="weeklyTarget <= (5/60)">−</button>
+        <button @click="decreaseWeeklyTarget" class="stepper-btn" :disabled="weeklyTarget <= (5 / 60)">−</button>
         <div class="time-display">
           {{ formatHoursMinutes(weeklyTarget) }}
         </div>
@@ -24,116 +24,84 @@
 
     <!-- Distribution Mode -->
     <div class="section">
-      <div class="section-title">Distribution Mode</div>
-      <div class="mode-options">
-        <label class="mode-option">
-          <input 
-            type="radio" 
-            name="distribution-mode"
-            value="equal" 
-            :checked="mode === 'equal'"
-            @change="handleModeChange"
-          />
-          <span>Equal Distribution</span>
-          <small>Same hours every day</small>
-        </label>
-        
-        <label class="mode-option">
-          <input 
-            type="radio" 
-            name="distribution-mode"
-            value="custom" 
-            :checked="mode === 'custom'"
-            @change="handleModeChange"
-          />
-          <span>Custom</span>
-          <small>Individual daily targets</small>
-        </label>
+      <div class="section-title">Daily Target Distribution</div>
+      <div class="mode-info">
+        <p>All daily targets are now customizable. Use the presets below for quick setup, or adjust individual days
+          manually.</p>
       </div>
-    </div>
 
-    <!-- Quick Presets (only show in custom mode) -->
-    <div v-if="mode === 'custom'" class="section">
-      <div class="section-title">Quick Presets</div>
-      <div class="preset-buttons">
-        <button @click="applyPreset('equal')" class="preset-btn">
-          Equal
-        </button>
-        <button @click="applyPreset('frontLoaded')" class="preset-btn">
-          Front-loaded
-        </button>
-        <button @click="applyPreset('backLoaded')" class="preset-btn">
-          Back-loaded
-        </button>
-        <button @click="applyPreset('balanced')" class="preset-btn">
-          Balanced
-        </button>
-        <button @click="setFromLogged" class="preset-btn logged-preset" 
-                :disabled="!props.timeData || !hasLoggedTime" 
-                title="Set targets based on actual logged time (only for days with logged hours)">
-          📊 From Logged
-        </button>
+      <!-- Quick Presets (only show in custom mode) -->
+      <div v-if="mode === 'custom'" class="section">
+        <div class="section-title">Quick Presets</div>
+        <div class="preset-buttons">
+          <button @click="applyPreset('equal')" class="preset-btn">
+            Equal
+          </button>
+          <button @click="applyPreset('frontLoaded')" class="preset-btn">
+            Front-loaded
+          </button>
+          <button @click="applyPreset('backLoaded')" class="preset-btn">
+            Back-loaded
+          </button>
+          <button @click="applyPreset('balanced')" class="preset-btn">
+            Balanced
+          </button>
+          <button @click="setFromLogged" class="preset-btn logged-preset" :disabled="!props.timeData || !hasLoggedTime"
+            title="Set targets based on actual logged time (only for days with logged hours)">
+            📊 From Logged
+          </button>
+        </div>
       </div>
-    </div>
 
-    <!-- Weekly Distribution (only show in custom mode) -->
-    <div v-if="mode === 'custom'" class="section">
-      <div class="section-title">Weekly Distribution</div>
-      
-      <!-- Interactive distribution chart -->
-      <div class="interactive-distribution">
-        <div class="distribution-bars">
-          <div v-for="day in workdays" :key="day" class="interactive-bar">
-            <div class="bar-label">{{ formatDayName(day) }}</div>
-            <div class="bar-container" 
-                 @wheel="handleWheel(day, $event)"
-                 @click="handleBarClick(day, $event)"
-                 :title="`${formatDayName(day)}: ${formatHoursMinutes(dailyTargets[day] || 0)} - Click or scroll to adjust`"
-                 :class="{ 'locked': isLocked(day) }">
-              <div 
-                class="bar-fill" 
-                :style="{ 
-                  height: `${getBarHeight(dailyTargets[day] || 0)}%` 
-                }"
-              ></div>
-              <div class="bar-overlay">
-                <button @click.stop="increaseDayTarget(day)" 
-                        class="bar-btn increase"
-                        :disabled="isLocked(day)"
-                        title="Increase by 5 minutes">+</button>
-                <button @click.stop="decreaseDayTarget(day)" 
-                        class="bar-btn decrease" 
-                        :disabled="(dailyTargets[day] || 0) <= (5/60) || isLocked(day)"
-                        title="Decrease by 5 minutes">−</button>
+      <!-- Weekly Distribution (only show in custom mode) -->
+      <div v-if="mode === 'custom'" class="section">
+        <div class="section-title">Weekly Distribution</div>
+
+        <!-- Interactive distribution chart -->
+        <div class="interactive-distribution">
+          <div class="distribution-bars">
+            <div v-for="day in workdays" :key="day" class="interactive-bar">
+              <div class="bar-label">{{ formatDayName(day) }}</div>
+              <div class="bar-container" @wheel="handleWheel(day, $event)" @click="handleBarClick(day, $event)"
+                :title="`${formatDayName(day)}: ${formatHoursMinutes(dailyTargets[day] || 0)} - Click or scroll to adjust`"
+                :class="{ 'locked': isLocked(day) }">
+                <div class="bar-fill" :style="{
+                  height: `${getBarHeight(dailyTargets[day] || 0)}%`
+                }"></div>
+                <div class="bar-overlay">
+                  <button @click.stop="increaseDayTarget(day)" class="bar-btn increase" :disabled="isLocked(day)"
+                    title="Increase by 5 minutes">+</button>
+                  <button @click.stop="decreaseDayTarget(day)" class="bar-btn decrease"
+                    :disabled="(dailyTargets[day] || 0) <= (5 / 60) || isLocked(day)"
+                    title="Decrease by 5 minutes">−</button>
+                </div>
+                <button @click.stop="toggleLock(day)" class="lock-btn"
+                  :title="isLocked(day) ? 'Unlock this day' : 'Lock this day'" :class="{ 'locked': isLocked(day) }">
+                  {{ isLocked(day) ? '🔒' : '🔓' }}
+                </button>
               </div>
-              <button @click.stop="toggleLock(day)" 
-                      class="lock-btn"
-                      :title="isLocked(day) ? 'Unlock this day' : 'Lock this day'"
-                      :class="{ 'locked': isLocked(day) }">
-                {{ isLocked(day) ? '🔒' : '🔓' }}
-              </button>
-            </div>
-            <div class="bar-value" :class="{ 'locked': isLocked(day) }">
-              {{ formatHoursMinutes(dailyTargets[day] || 0) }}
-              <span v-if="isLocked(day)" class="lock-indicator">🔒</span>
+              <div class="bar-value" :class="{ 'locked': isLocked(day) }">
+                {{ formatHoursMinutes(dailyTargets[day] || 0) }}
+                <span v-if="isLocked(day)" class="lock-indicator">🔒</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- Info Section -->
-    <div class="info-section">
-      <div class="info-item">
-        <strong>💡 Tips:</strong>
-        <ul>
-          <li>Targets apply to weekdays only (Wed-Tue work week)</li>
-          <li>Changes auto-save to your browser</li>
-          <li>Custom mode allows precise daily control</li>
-          <li>Click the lock 🔓/🔒 to prevent a day from changing</li>
-          <li>"Set from Logged" copies your actual tracked hours as targets</li>
-          <li>Use presets for common patterns</li>
-        </ul>
+      <!-- Info Section -->
+      <div class="info-section">
+        <div class="info-item">
+          <strong>💡 Tips:</strong>
+          <ul>
+            <li>Targets apply to weekdays only (Wed-Tue work week)</li>
+            <li>Changes auto-save to your browser</li>
+            <li>Custom mode allows precise daily control</li>
+            <li>Click the lock 🔓/🔒 to prevent a day from changing</li>
+            <li>"Set from Logged" copies your actual tracked hours as targets</li>
+            <li>Use presets for common patterns</li>
+          </ul>
+        </div>
       </div>
     </div>
   </div>
@@ -158,7 +126,6 @@ const {
   isWeeklyTargetMet,
   updateDayTarget: updateDayTargetRaw,
   setFromLoggedData,
-  setMode,
   setWeeklyTarget,
   applyPreset,
   toggleLock,
@@ -186,39 +153,33 @@ function formatDayName(day: string): string {
 
 // Weekly target stepper functions (5-minute intervals = 5/60 hours = 0.0833... hours)
 function increaseWeeklyTarget() {
-  setWeeklyTarget(weeklyTarget.value + (5/60));
+  setWeeklyTarget(weeklyTarget.value + (5 / 60));
 }
 
 function decreaseWeeklyTarget() {
-  const newValue = Math.max((5/60), weeklyTarget.value - (5/60));
+  const newValue = Math.max((5 / 60), weeklyTarget.value - (5 / 60));
   setWeeklyTarget(newValue);
 }
 
 // Daily target stepper functions (5-minute intervals = 5/60 hours = 0.0833... hours)
 function increaseDayTarget(day: string) {
   const currentValue = dailyTargets.value[day] || 0;
-  updateDayTargetRaw(day, currentValue + (5/60));
+  updateDayTargetRaw(day, currentValue + (5 / 60));
 }
 
 function decreaseDayTarget(day: string) {
   const currentValue = dailyTargets.value[day] || 0;
-  const newValue = Math.max(0, currentValue - (5/60));
+  const newValue = Math.max(0, currentValue - (5 / 60));
   updateDayTargetRaw(day, newValue);
-}
-
-function handleModeChange(event: Event) {
-  const target = event.target as HTMLInputElement;
-  const newMode = target.value as 'equal' | 'custom';
-  setMode(newMode);
 }
 
 // Handle mouse wheel for adjusting values
 function handleWheel(day: string, event: WheelEvent) {
   if (isLocked(day)) return; // Don't adjust locked days
-  
+
   event.preventDefault();
   const delta = Math.sign(event.deltaY); // 1 for down (decrease), -1 for up (increase)
-  
+
   if (delta > 0) {
     decreaseDayTarget(day);
   } else {
@@ -229,16 +190,16 @@ function handleWheel(day: string, event: WheelEvent) {
 // Handle bar clicks for direct manipulation
 function handleBarClick(day: string, event: MouseEvent) {
   if (isLocked(day)) return; // Don't adjust locked days
-  
+
   const target = event.currentTarget as HTMLElement;
   const rect = target.getBoundingClientRect();
   const clickY = event.clientY - rect.top;
   const percentage = 1 - (clickY / rect.height); // Inverted because 0% is at bottom
-  
+
   // Calculate target based on click position (max 10 hours)
   const maxTarget = 10;
-  const newTarget = Math.max(5/60, Math.round((percentage * maxTarget) * 12) / 12); // Round to 5-minute increments
-  
+  const newTarget = Math.max(5 / 60, Math.round((percentage * maxTarget) * 12) / 12); // Round to 5-minute increments
+
   updateDayTargetRaw(day, newTarget);
 }
 
@@ -372,6 +333,20 @@ function setFromLogged() {
   border-radius: 6px;
 }
 
+.mode-info {
+  padding: 1rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.mode-info p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
 .mode-options {
   display: grid;
   gap: 0.75rem;
@@ -393,7 +368,7 @@ function setFromLogged() {
   background: #f8f9fa;
 }
 
-.mode-option input[type="radio"]:checked + span {
+.mode-option input[type="radio"]:checked+span {
   color: #007bff;
   font-weight: 600;
 }
@@ -585,13 +560,13 @@ function setFromLogged() {
     padding: 1rem;
     margin: 0.5rem;
   }
-  
+
   .settings-header {
     flex-direction: column;
     gap: 1rem;
     align-items: stretch;
   }
-  
+
   .day-input {
     grid-template-columns: 1fr;
     gap: 0.5rem;
@@ -601,11 +576,11 @@ function setFromLogged() {
   .time-stepper-group {
     justify-content: center;
   }
-  
+
   .preset-buttons {
     grid-template-columns: repeat(2, 1fr);
   }
-  
+
   .preview-bars {
     height: 100px;
   }

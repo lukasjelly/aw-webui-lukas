@@ -218,49 +218,16 @@ class AwServerApi {
         throw new Error('Required buckets not found. Make sure ActivityWatch is running.');
       }
 
-      // Get AFK events to filter out inactive time
-      const afkEvents = await this.getEvents(afkBucket.id, start, end);
-      const activeEvents = afkEvents.filter(event => event.data.status === 'not-afk');
-
-      // Calculate total active time
-      const totalSeconds = activeEvents.reduce((sum, event) => sum + event.duration, 0);
-      const totalHours = totalSeconds / 3600;
-
       // Calculate daily breakdown (Wednesday to Tuesday)
       const dailyBreakdown: { date: string; hours: number }[] = [];
       const currentDate = new Date(start);
+      let totalHours = 0;
       
       // Ensure we start from Wednesday and go through Tuesday (7 days)
       for (let i = 0; i < 7; i++) {
-        const dayStart = new Date(currentDate);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(currentDate);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        const dayEvents = activeEvents.filter(event => {
-          const eventDate = new Date(event.timestamp);
-          const eventEnd = new Date(eventDate.getTime() + event.duration * 1000);
-          
-          // Check if event overlaps with this day
-          return (eventDate <= dayEnd && eventEnd >= dayStart);
-        });
-
-        // Calculate duration for events that overlap with this day
-        let daySeconds = 0;
-        dayEvents.forEach(event => {
-          const eventStart = new Date(event.timestamp);
-          const eventEnd = new Date(eventStart.getTime() + event.duration * 1000);
-          
-          // Calculate the overlap duration
-          const overlapStart = eventStart > dayStart ? eventStart : dayStart;
-          const overlapEnd = eventEnd < dayEnd ? eventEnd : dayEnd;
-          
-          if (overlapStart < overlapEnd) {
-            daySeconds += (overlapEnd.getTime() - overlapStart.getTime()) / 1000;
-          }
-        });
-
-        const dayHours = daySeconds / 3600;
+        // Use the same method as timeline for consistency
+        const dayData = await this.getDayTimelineData(currentDate);
+        const dayHours = dayData.totalActiveSeconds / 3600;
 
         // Use local date string to avoid timezone issues
         const localDateString = currentDate.getFullYear() + '-' + 
@@ -272,6 +239,7 @@ class AwServerApi {
           hours: Math.round(dayHours * 100) / 100,
         });
 
+        totalHours += dayHours;
         currentDate.setDate(currentDate.getDate() + 1);
       }
 

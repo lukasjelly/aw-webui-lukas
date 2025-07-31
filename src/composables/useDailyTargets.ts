@@ -8,7 +8,7 @@ const WORKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
 
 class DailyTargetsManager {
   private config = ref<DailyTargetsConfig>({
-    mode: 'equal' as DistributionMode,
+    mode: 'custom' as DistributionMode,
     customTargets: {},
     weeklyTarget: 34.17, // 34h 10m in decimal
     lockedDays: {},
@@ -18,6 +18,16 @@ class DailyTargetsManager {
   constructor() {
     this.loadFromStorage();
     this.watchForChanges();
+    
+    // Ensure we always have custom targets initialized with equal distribution if empty
+    if (Object.keys(this.config.value.customTargets).length === 0) {
+      const hoursPerDay = this.config.value.weeklyTarget / WORKDAYS.length;
+      const equalTargets = WORKDAYS.reduce((acc, day) => {
+        acc[day] = hoursPerDay;
+        return acc;
+      }, {} as Record<string, number>);
+      this.config.value.customTargets = equalTargets;
+    }
   }
 
   private loadFromStorage() {
@@ -26,6 +36,19 @@ class DailyTargetsManager {
       if (stored) {
         const parsedConfig = JSON.parse(stored);
         parsedConfig.lastModified = new Date(parsedConfig.lastModified);
+        
+        // Convert old "equal" mode to "custom" mode with equal distribution
+        if (parsedConfig.mode === 'equal') {
+          parsedConfig.mode = 'custom';
+          if (!parsedConfig.customTargets || Object.keys(parsedConfig.customTargets).length === 0) {
+            const hoursPerDay = parsedConfig.weeklyTarget / WORKDAYS.length;
+            parsedConfig.customTargets = WORKDAYS.reduce((acc, day) => {
+              acc[day] = hoursPerDay;
+              return acc;
+            }, {} as Record<string, number>);
+          }
+        }
+        
         this.config.value = { ...this.config.value, ...parsedConfig };
       }
     } catch (error) {
@@ -51,26 +74,20 @@ class DailyTargetsManager {
   // Computed daily targets based on current mode
   get dailyTargets() {
     return computed(() => {
-      switch (this.config.value.mode) {
-        case 'equal':
-          return this.getEqualDistribution();
-        case 'custom':
-          return this.getCustomDistribution();
-        default:
-          return this.getEqualDistribution();
-      }
+      return this.getCustomDistribution();
     });
   }
 
-  private getEqualDistribution(): Record<string, number> {
-    const hoursPerDay = this.config.value.weeklyTarget / WORKDAYS.length;
-    return WORKDAYS.reduce((acc, day) => {
-      acc[day] = hoursPerDay;
-      return acc;
-    }, {} as Record<string, number>);
-  }
-
   private getCustomDistribution(): Record<string, number> {
+    // If no custom targets are set, initialize with equal distribution
+    if (Object.keys(this.config.value.customTargets).length === 0) {
+      const hoursPerDay = this.config.value.weeklyTarget / WORKDAYS.length;
+      const equalTargets = WORKDAYS.reduce((acc, day) => {
+        acc[day] = hoursPerDay;
+        return acc;
+      }, {} as Record<string, number>);
+      this.config.value.customTargets = equalTargets;
+    }
     return { ...this.config.value.customTargets };
   }
 
@@ -110,11 +127,6 @@ class DailyTargetsManager {
 
   // Auto-set targets based on logged time data
   setFromLoggedData(weeklyTimeData: any) {
-    // First, switch to custom mode if not already
-    if (this.config.value.mode !== 'custom') {
-      this.setMode('custom');
-    }
-
     const currentTargets = { ...this.config.value.customTargets };
     const lockedDays = this.config.value.lockedDays || {};
     
@@ -143,7 +155,8 @@ class DailyTargetsManager {
 
   // Set distribution mode
   setMode(mode: DistributionMode) {
-    if (mode === 'custom' && Object.keys(this.config.value.customTargets).length === 0) {
+    // Since we only support 'custom' mode now, always ensure custom targets are initialized
+    if (Object.keys(this.config.value.customTargets).length === 0) {
       // Initialize custom targets with equal distribution calculation
       const hoursPerDay = this.config.value.weeklyTarget / WORKDAYS.length;
       const equalTargets = WORKDAYS.reduce((acc, day) => {
@@ -160,21 +173,18 @@ class DailyTargetsManager {
   setWeeklyTarget(hours: number) {
     this.config.value.weeklyTarget = hours;
     
-    // If in equal mode, targets will auto-update
-    // If in custom mode, keep existing distribution ratios
-    if (this.config.value.mode === 'custom') {
-      const currentTargets = { ...this.config.value.customTargets };
-      const currentTotal = Object.values(currentTargets).reduce((sum, h) => sum + h, 0);
-      
-      if (currentTotal > 0) {
-        const scaleFactor = hours / currentTotal;
-        WORKDAYS.forEach(day => {
-          if (currentTargets[day]) {
-            currentTargets[day] *= scaleFactor;
-          }
-        });
-        this.config.value.customTargets = currentTargets;
-      }
+    // Keep existing distribution ratios in custom mode
+    const currentTargets = { ...this.config.value.customTargets };
+    const currentTotal = Object.values(currentTargets).reduce((sum, h) => sum + h, 0);
+    
+    if (currentTotal > 0) {
+      const scaleFactor = hours / currentTotal;
+      WORKDAYS.forEach(day => {
+        if (currentTargets[day]) {
+          currentTargets[day] *= scaleFactor;
+        }
+      });
+      this.config.value.customTargets = currentTargets;
     }
   }
 
@@ -217,11 +227,6 @@ class DailyTargetsManager {
 
   // Preset distributions
   applyPreset(preset: 'equal' | 'frontLoaded' | 'backLoaded' | 'balanced') {
-    // First, switch to custom mode if not already
-    if (this.config.value.mode !== 'custom') {
-      this.setMode('custom');
-    }
-
     const currentTargets = { ...this.config.value.customTargets };
     const lockedDays = this.config.value.lockedDays || {};
     
@@ -272,7 +277,12 @@ class DailyTargetsManager {
         };
         break;
       default: // equal
-        presetTargets = this.getEqualDistribution();
+        // Create equal distribution inline
+        const equalShare = this.config.value.weeklyTarget / WORKDAYS.length;
+        presetTargets = WORKDAYS.reduce((acc, day) => {
+          acc[day] = equalShare;
+          return acc;
+        }, {} as Record<string, number>);
         break;
     }
 
