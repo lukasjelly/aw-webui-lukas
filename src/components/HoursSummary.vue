@@ -14,14 +14,12 @@
     <div v-else-if="timeData" class="summary-content">
       <div class="total-hours">
         <h3>Total Hours This Week</h3>
-        <div class="hours-display">{{ formatHoursMinutes(timeData.totalHours) }}</div>
+        <div class="hours-display">{{ formatHoursMinutes(adjustedTotalHours) }}</div>
 
         <div class="target-progress">
           <div class="target-info">
-            <div class="target-stepper">
-              <button @click="decreaseWeeklyTarget" class="target-stepper-btn" :disabled="weeklyTarget <= (5 / 60)">−</button>
-              <span class="target-label">Target: {{ targetDisplayText }}</span>
-              <button @click="increaseWeeklyTarget" class="target-stepper-btn">+</button>
+              <div class="target-display">
+                <span class="target-label">Target: {{ targetDisplayText }}</span>
             </div>
             <span class="remaining-label" :class="remainingClass">
               {{ remainingText }}
@@ -38,7 +36,7 @@
       <div class="daily-breakdown">
         <h4>Daily Breakdown <span class="clickable-hint">(Click on any day for timeline)</span></h4>
         <div class="daily-grid">
-          <div v-for="day in timeData.dailyBreakdown" :key="day.date" class="day-item" @click="openTimeline(day.date)"
+          <div v-for="day in filteredDailyBreakdown" :key="day.date" class="day-item" @click="openTimeline(day.date)"
             :title="`Click to view timeline for ${formatDayName(day.date)}, ${formatDayDate(day.date)}`">
             <div class="day-info">
               <div class="day-name">{{ formatDayName(day.date) }}</div>
@@ -50,9 +48,9 @@
                    :class="{ 'target-met': isDailyTargetMet(day.hours, day.date), 'below-target': !isDailyTargetMet(day.hours, day.date) }"></div>
             </div>
             <div class="day-hours" :class="{ 'target-met': isDailyTargetMet(day.hours, day.date), 'below-target': !isDailyTargetMet(day.hours, day.date) }">
-              {{ formatHoursMinutes(day.hours) }}
+              {{ formatHoursMinutes(getAdjustedHours(day.hours)) }}
               <div class="day-target">
-                <span v-if="!isWeekend(day.date)">Target: {{ getDailyTargetText(day.date) }}</span>
+                <span v-if="hasTargetForDate(day.date)">Target: {{ getDailyTargetText(day.date) }}</span>
                 <span v-else>&nbsp;</span>
               </div>
             </div>
@@ -92,11 +90,29 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<Emits>();
 
 // Initialize daily targets composable
-const { getDailyTargetForDate: getComposableDailyTarget, weeklyTarget, setWeeklyTarget } = useDailyTargets();
+const { getDailyTargetForDate: getComposableDailyTarget, weeklyTarget, weekMode, awkOffsetMinutes } = useDailyTargets();
+
+const filteredDailyBreakdown = computed(() => {
+  if (!props.timeData?.dailyBreakdown) return [];
+  if (weekMode.value !== 'work') return props.timeData.dailyBreakdown;
+  return props.timeData.dailyBreakdown.filter(day => {
+    const [year, month, d] = day.date.split('-').map(Number);
+    const dow = new Date(year, month - 1, d).getDay();
+    return dow !== 0 && dow !== 6;
+  });
+});
+
+const getAdjustedHours = (rawHours: number): number => {
+  return rawHours > 0 ? rawHours + awkOffsetMinutes.value / 60 : rawHours;
+};
+
+const adjustedTotalHours = computed(() => {
+  return filteredDailyBreakdown.value.reduce((sum, day) => sum + getAdjustedHours(day.hours), 0);
+});
 
 const maxHours = computed(() => {
-  if (!props.timeData?.dailyBreakdown) return 8;
-  return Math.max(...props.timeData.dailyBreakdown.map(d => d.hours), 8);
+  if (!filteredDailyBreakdown.value.length) return 8;
+  return Math.max(...filteredDailyBreakdown.value.map(d => getAdjustedHours(d.hours)), 8);
 });
 
 const targetTotalHours = computed(() => {
@@ -118,24 +134,24 @@ const targetDisplayText = computed(() => {
 
 const progressPercentage = computed(() => {
   if (!props.timeData) return 0;
-  return Math.min((props.timeData.totalHours / targetTotalHours.value) * 100, 100);
+  return Math.min((adjustedTotalHours.value / targetTotalHours.value) * 100, 100);
 });
 
 const hasExceededTarget = computed(() => {
   if (!props.timeData) return false;
-  return props.timeData.totalHours > targetTotalHours.value;
+  return adjustedTotalHours.value > targetTotalHours.value;
 });
 
 const remainingHours = computed(() => {
   if (!props.timeData) return targetTotalHours.value;
-  return Math.max(targetTotalHours.value - props.timeData.totalHours, 0);
+  return Math.max(targetTotalHours.value - adjustedTotalHours.value, 0);
 });
 
 const remainingText = computed(() => {
   if (!props.timeData) return `${targetTotalHours.value.toFixed(1)}h remaining`;
 
   if (hasExceededTarget.value) {
-    const excess = props.timeData.totalHours - targetTotalHours.value;
+    const excess = adjustedTotalHours.value - targetTotalHours.value;
     return `+${excess.toFixed(1)}h over target!`;
   }
 
@@ -167,32 +183,29 @@ const remainingClass = computed(() => {
   }
 });
 
-const dailyTargetHours = computed(() => {
-  return targetTotalHours.value / 5; // Divide weekly target by 5 workdays
-});
-
 const getDailyTargetForDate = (dateStr: string): number => {
-  // Use the composable's method if available, otherwise use equal distribution
-  return getComposableDailyTarget(dateStr) || dailyTargetHours.value;
+  return getComposableDailyTarget(dateStr);
 };
 
-const getBarHeight = (hours: number, dateStr: string): number => {
-  if (isWeekend(dateStr)) {
-    // For weekends, use the max hours across all days for scaling
+const hasTargetForDate = (dateStr: string): boolean => {
+  return getDailyTargetForDate(dateStr) > 0;
+};
+
+const getBarHeight = (rawHours: number, dateStr: string): number => {
+  const hours = getAdjustedHours(rawHours);
+  if (!hasTargetForDate(dateStr)) {
     return (hours / maxHours.value) * 100;
-  } else {
-    // For weekdays, show progress against daily target from composable
-    const dailyTarget = getDailyTargetForDate(dateStr);
-    return Math.min((hours / dailyTarget) * 100, 100);
-  }
-};
-
-const isDailyTargetMet = (hours: number, dateStr: string): boolean => {
-  if (isWeekend(dateStr)) {
-    return true; // Weekends are always "met" since no target
   }
   const dailyTarget = getDailyTargetForDate(dateStr);
-  // Round both values to 3 decimal places to handle floating-point precision issues
+  return Math.min((hours / dailyTarget) * 100, 100);
+};
+
+const isDailyTargetMet = (rawHours: number, dateStr: string): boolean => {
+  if (!hasTargetForDate(dateStr)) {
+    return true;
+  }
+  const hours = getAdjustedHours(rawHours);
+  const dailyTarget = getDailyTargetForDate(dateStr);
   const roundedHours = Math.round(hours * 1000) / 1000;
   const roundedTarget = Math.round(dailyTarget * 1000) / 1000;
   return roundedHours >= roundedTarget;
@@ -205,10 +218,8 @@ const isWeekend = (dateStr: string): boolean => {
 };
 
 const getDailyTargetText = (dateStr: string): string => {
-  if (isWeekend(dateStr)) {
-    return ''; // No target for weekends
-  }
   const dailyTarget = getDailyTargetForDate(dateStr);
+  if (!dailyTarget) return '';
   return formatHoursMinutes(dailyTarget);
 };
 
@@ -218,8 +229,8 @@ const formatDayName = (dateStr: string): string => {
 };
 
 const formatDayDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' });
+  const [, month, day] = dateStr.split('-');
+  return `${day}/${month}`;
 };
 
 const formatHoursMinutes = (hours: number): string => {
@@ -241,15 +252,7 @@ const openTimeline = (dateStr: string) => {
   emit('open-timeline', dateStr);
 };
 
-// Weekly target stepper functions (5-minute intervals = 5/60 hours = 0.0833... hours)
-const increaseWeeklyTarget = () => {
-  setWeeklyTarget(weeklyTarget.value + (5 / 60));
-};
-
-const decreaseWeeklyTarget = () => {
-  const newValue = Math.max((5 / 60), weeklyTarget.value - (5 / 60));
-  setWeeklyTarget(newValue);
-};
+// Weekly target stepper functions removed — target is now set in the Settings panel
 </script>
 
 <style scoped>

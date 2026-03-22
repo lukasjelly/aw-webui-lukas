@@ -10,8 +10,52 @@
       </div>
     </div>
 
+    <!-- Tab Navigation -->
+    <div class="tab-bar">
+      <button :class="['tab-btn', { active: activeTab === 'general' }]" @click="activeTab = 'general'">General</button>
+      <button :class="['tab-btn', { active: activeTab === 'targets' }]" @click="activeTab = 'targets'">Daily Targets</button>
+    </div>
+
+    <!-- General Settings -->
+    <div v-if="activeTab === 'general'" class="section">
+      <div class="section-title">General Settings</div>
+
+      <div class="setting-row">
+        <label class="setting-label">Weekly Target</label>
+        <div class="time-input-group">
+          <input type="number" v-model.number="localTargetHours" min="0" max="168" class="time-input" @change="applyWeeklyTarget" />
+          <span class="time-sep">h</span>
+          <input type="number" v-model.number="localTargetMinutes" min="0" max="59" step="5" class="time-input" @change="applyWeeklyTarget" />
+          <span class="time-sep">m</span>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">Week starts on</label>
+        <select v-model.number="localStartDay" @change="setStartDay(localStartDay)" class="setting-select">
+          <option v-for="(name, idx) in DAY_NAMES" :key="idx" :value="idx">{{ name }}</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label">Working days</label>
+        <div class="toggle-group">
+          <button :class="['toggle-btn', { active: weekMode === 'work' }]" @click="setWeekMode('work')">Work Week (5 days)</button>
+          <button :class="['toggle-btn', { active: weekMode === 'full' }]" @click="setWeekMode('full')">Full Week (7 days)</button>
+        </div>
+      </div>
+
+      <div class="setting-row">
+        <label class="setting-label" title="Minutes of break/away time to add per working day with activity — e.g. toilet breaks, in-person conversations that don't show as computer activity">Break &amp; Away Time</label>
+        <div class="time-input-group">
+          <input type="number" v-model.number="localAwkMinutes" min="0" max="480" step="5" class="time-input" style="width:64px" @change="applyAwkOffset" />
+          <span class="time-sep">min / working day</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Distribution Mode -->
-    <div class="section">
+    <div v-if="activeTab === 'targets'" class="section">
 
       <!-- Quick Presets (only show in custom mode) -->
       <div v-if="mode === 'custom'" class="section">
@@ -68,7 +112,6 @@
         <div class="info-item">
           <strong>💡 Tips:</strong>
           <ul>
-            <li>Targets apply to weekdays only (Wed-Tue work week)</li>
             <li>Changes auto-save to your browser</li>
             <li>Custom mode allows precise daily control</li>
             <li>Click the lock 🔓/🔒 to prevent a day from changing</li>
@@ -84,7 +127,7 @@
 <script setup lang="ts">
 import { useDailyTargets } from '../composables/useDailyTargets';
 import type { WeeklyTimeData } from '../types';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface Props {
   timeData?: WeeklyTimeData;
@@ -103,9 +146,44 @@ const {
   applyEqualPreset,
   toggleLock,
   isLocked,
+  setWeeklyTarget,
+  orderedWorkdays,
+  startDay,
+  weekMode,
+  setStartDay,
+  setWeekMode,
+  awkOffsetMinutes,
+  setAwkOffset,
 } = useDailyTargets();
 
-const workdays = ['wednesday', 'thursday', 'friday', 'monday', 'tuesday'];
+const workdays = orderedWorkdays;
+
+// Local refs for weekly target inputs (sync from composable)
+const localTargetHours = ref(Math.floor(weeklyTarget.value));
+const localTargetMinutes = ref(Math.round((weeklyTarget.value % 1) * 60));
+watch(weeklyTarget, (val) => {
+  localTargetHours.value = Math.floor(val);
+  localTargetMinutes.value = Math.round((val % 1) * 60);
+});
+function applyWeeklyTarget() {
+  const total = localTargetHours.value + localTargetMinutes.value / 60;
+  if (total > 0) setWeeklyTarget(total);
+}
+
+// Local ref for start day (sync from composable)
+const localStartDay = ref(startDay.value);
+watch(startDay, (val) => { localStartDay.value = val; });
+
+// Local ref for AWK offset in minutes (sync from composable)
+const localAwkMinutes = ref(awkOffsetMinutes.value);
+watch(awkOffsetMinutes, (val) => { localAwkMinutes.value = val; });
+function applyAwkOffset() {
+  setAwkOffset(Math.max(0, Math.min(480, Math.round(localAwkMinutes.value || 0))));
+}
+
+const activeTab = ref<'general' | 'targets'>('general');
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 // Check if there's any logged time data available
 const hasLoggedTime = computed(() => {
@@ -700,5 +778,127 @@ function setFromLogged() {
 
 .lock-indicator {
   font-size: 0.6rem;
+}
+
+/* General Settings section */
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-label {
+  font-weight: 500;
+  color: #34495e;
+  flex-shrink: 0;
+}
+
+.time-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.time-input {
+  width: 54px;
+  padding: 0.35rem 0.4rem;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  text-align: center;
+}
+
+.time-input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.time-sep {
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.setting-select {
+  padding: 0.35rem 0.6rem;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  background: white;
+  cursor: pointer;
+}
+
+.setting-select:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.toggle-group {
+  display: flex;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.toggle-btn {
+  padding: 0.35rem 0.75rem;
+  border: none;
+  background: white;
+  color: #6c757d;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggle-btn:not(:last-child) {
+  border-right: 2px solid #e9ecef;
+}
+
+.toggle-btn.active {
+  background: #007bff;
+  color: white;
+  font-weight: 600;
+}
+
+.toggle-btn:hover:not(.active) {
+  background: #f0f4ff;
+  color: #007bff;
+}
+
+/* Tab navigation */
+.tab-bar {
+  display: flex;
+  border-bottom: 2px solid #e9ecef;
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  padding: 0.55rem 1.25rem;
+  border: none;
+  background: none;
+  color: #6c757d;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab-btn.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  font-weight: 600;
+}
+
+.tab-btn:hover:not(.active) {
+  color: #495057;
+  background: #f8f9fa;
 }
 </style>

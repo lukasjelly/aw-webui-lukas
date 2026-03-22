@@ -20,16 +20,24 @@
         <div v-else-if="timelineData && timelineData.length > 0" class="timeline">
           <div class="timeline-stats">
             <div class="stat-item">
-              <span class="stat-label">Total Active Time:</span>
+              <span class="stat-label">Active Time:</span>
               <span class="stat-value active">{{ totalActiveTime }}</span>
             </div>
+            <div v-if="totalOffsetSeconds > 0" class="stat-item">
+              <span class="stat-label">Break / Away Time:</span>
+              <span class="stat-value offset">{{ totalOffsetTime }}</span>
+            </div>
             <div class="stat-item">
-              <span class="stat-label">Total Inactive Time:</span>
+              <span class="stat-label">Inactive Time:</span>
               <span class="stat-value inactive">{{ totalInactiveTime }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">Active Periods:</span>
               <span class="stat-value">{{ activePeriodsCount }}</span>
+            </div>
+            <div v-if="offsetPeriodsCount > 0" class="stat-item">
+              <span class="stat-label">Break Periods:</span>
+              <span class="stat-value">{{ offsetPeriodsCount }}</span>
             </div>
             <div class="stat-item">
               <span class="stat-label">Inactive Periods:</span>
@@ -46,12 +54,12 @@
             
             <div class="timeline-events">
               <div 
-                v-for="(event, index) in timelineData" 
+                v-for="(event, index) in processedTimelineData" 
                 :key="index"
                 class="timeline-event"
                 :class="event.type"
                 :style="getEventStyle(event)"
-                :title="`${event.type === 'active' ? 'Active' : 'Inactive'} period: ${formatTime(event.start)} to ${formatTime(event.end)} (${formatDuration(event.duration)})`"
+                :title="`${event.type === 'active' ? 'Active' : event.type === 'offset' ? 'Break / Away' : 'Inactive'} period: ${formatTime(event.start)} to ${formatTime(event.end)} (${formatDuration(event.duration)})`"
               >
                 <div class="event-content">
                   <div class="event-duration">{{ formatDuration(event.duration) }}</div>
@@ -61,16 +69,16 @@
           </div>
           
           <div class="time-periods">
-            <h4>Time Periods ({{ activePeriodsCount }} active, {{ inactivePeriodsCount }} inactive)</h4>
+            <h4>Time Periods</h4>
             <div class="periods-items">
               <div 
-                v-for="(event, index) in timelineData" 
+                v-for="(event, index) in processedTimelineData" 
                 :key="index"
                 class="period-item"
                 :class="event.type"
               >
                 <div class="period-info">
-                  <div class="period-type">{{ event.type === 'active' ? 'Active' : 'Inactive' }}</div>
+                  <div class="period-type">{{ event.type === 'active' ? 'Active' : event.type === 'offset' ? 'Break / Away' : 'Inactive' }}</div>
                   <div class="period-time">
                     {{ formatTime(event.start) }} - {{ formatTime(event.end) }}
                   </div>
@@ -92,12 +100,13 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import AwServerApi from '../services/awServerApi';
+import { useDailyTargets } from '../composables/useDailyTargets';
 
 interface TimelineEvent {
   start: Date;
   end: Date;
   duration: number;
-  type: 'active' | 'inactive';
+  type: 'active' | 'inactive' | 'offset';
 }
 
 interface Props {
@@ -113,39 +122,58 @@ const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 
 const api = new AwServerApi();
+const { awkOffsetMinutes } = useDailyTargets();
 const timelineData = ref<TimelineEvent[]>([]);
 const totalActiveSeconds = ref(0);
 const totalInactiveSeconds = ref(0);
 const loading = ref(false);
 const error = ref('');
 
-const totalActiveTime = computed(() => {
-  if (totalActiveSeconds.value === 0) return '0h 0m';
-  
-  const totalMinutes = totalActiveSeconds.value / 60;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = Math.round(totalMinutes % 60);
-  
-  return `${hours}h ${minutes}m`;
+const formatHm = (seconds: number): string => {
+  if (seconds === 0) return '0h 0m';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return `${h}h ${m}m`;
+};
+
+// Consume inactive periods against the daily break/away budget.
+// Earliest inactive periods become 'offset' until the budget is exhausted.
+const processedTimelineData = computed((): TimelineEvent[] => {
+  if (!timelineData.value.length || totalActiveSeconds.value === 0) return timelineData.value;
+  const budgetSec = awkOffsetMinutes.value * 60;
+  if (budgetSec <= 0) return timelineData.value;
+
+  let remaining = budgetSec;
+  const result: TimelineEvent[] = [];
+  for (const event of timelineData.value) {
+    if (event.type === 'active' || remaining <= 0) {
+      result.push(event);
+    } else if (remaining >= event.duration) {
+      result.push({ ...event, type: 'offset' });
+      remaining -= event.duration;
+    } else {
+      result.push({ start: event.start, end: new Date(event.start.getTime() + remaining * 1000), duration: remaining, type: 'offset' });
+      result.push({ start: new Date(event.start.getTime() + remaining * 1000), end: event.end, duration: event.duration - remaining, type: 'inactive' });
+      remaining = 0;
+    }
+  }
+  return result;
 });
 
-const totalInactiveTime = computed(() => {
-  if (totalInactiveSeconds.value === 0) return '0h 0m';
-  
-  const totalMinutes = totalInactiveSeconds.value / 60;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = Math.round(totalMinutes % 60);
-  
-  return `${hours}h ${minutes}m`;
-});
+const totalOffsetSeconds = computed(() =>
+  processedTimelineData.value.filter(e => e.type === 'offset').reduce((s, e) => s + e.duration, 0)
+);
+const displayedInactiveSeconds = computed(() =>
+  processedTimelineData.value.filter(e => e.type === 'inactive').reduce((s, e) => s + e.duration, 0)
+);
 
-const activePeriodsCount = computed(() => {
-  return timelineData.value.filter(event => event.type === 'active').length;
-});
+const totalActiveTime = computed(() => formatHm(totalActiveSeconds.value));
+const totalOffsetTime = computed(() => formatHm(totalOffsetSeconds.value));
+const totalInactiveTime = computed(() => formatHm(displayedInactiveSeconds.value));
 
-const inactivePeriodsCount = computed(() => {
-  return timelineData.value.filter(event => event.type === 'inactive').length;
-});
+const activePeriodsCount = computed(() => processedTimelineData.value.filter(e => e.type === 'active').length);
+const offsetPeriodsCount = computed(() => processedTimelineData.value.filter(e => e.type === 'offset').length);
+const inactivePeriodsCount = computed(() => processedTimelineData.value.filter(e => e.type === 'inactive').length);
 
 const formatDate = (date: Date | null): string => {
   if (!date) return '';
@@ -377,6 +405,10 @@ watch(() => props.selectedDate, () => {
   color: #27ae60;
 }
 
+.stat-value.offset {
+  color: #f39c12;
+}
+
 .stat-value.inactive {
   color: #e74c3c;
 }
@@ -437,6 +469,10 @@ watch(() => props.selectedDate, () => {
   background: linear-gradient(135deg, #27ae60, #2ecc71);
 }
 
+.timeline-event.offset {
+  background: linear-gradient(135deg, #f39c12, #e67e22);
+}
+
 .timeline-event.inactive {
   background: linear-gradient(135deg, #e74c3c, #c0392b);
 }
@@ -483,6 +519,10 @@ watch(() => props.selectedDate, () => {
   border-left: 3px solid #27ae60;
 }
 
+.period-item.offset {
+  border-left: 3px solid #f39c12;
+}
+
 .period-item.inactive {
   border-left: 3px solid #e74c3c;
 }
@@ -504,6 +544,10 @@ watch(() => props.selectedDate, () => {
   color: #27ae60;
 }
 
+.period-item.offset .period-type {
+  color: #f39c12;
+}
+
 .period-item.inactive .period-type {
   color: #e74c3c;
 }
@@ -521,6 +565,10 @@ watch(() => props.selectedDate, () => {
 
 .period-duration.active {
   color: #27ae60;
+}
+
+.period-duration.offset {
+  color: #f39c12;
 }
 
 .period-duration.inactive {

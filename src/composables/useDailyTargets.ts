@@ -1,10 +1,10 @@
 import { ref, computed, watch } from 'vue';
-import type { DailyTargetsConfig, DistributionMode } from '../types';
+import type { DailyTargetsConfig, DistributionMode, WeekMode } from '../types';
 
 const STORAGE_KEY = 'aw-daily-targets-config';
 
-// Default workdays
-const WORKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+// All days indexed by getDay() value (0 = Sunday)
+const ALL_WEEK_DAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 class DailyTargetsManager {
   private config = ref<DailyTargetsConfig>({
@@ -12,6 +12,9 @@ class DailyTargetsManager {
     customTargets: {},
     weeklyTarget: 34.17, // 34h 10m in decimal
     lockedDays: {},
+    startDay: 3,          // Wednesday
+    weekMode: 'work',     // Weekdays only (non-Sat/Sun)
+    awkOffsetMinutes: 0,  // AWK time per day (toilet breaks, in-person convos, etc.)
     lastModified: new Date()
   });
 
@@ -21,12 +24,12 @@ class DailyTargetsManager {
     
     // Ensure we always have custom targets initialized with equal distribution if empty
     if (Object.keys(this.config.value.customTargets).length === 0) {
-      const hoursPerDay = this.config.value.weeklyTarget / WORKDAYS.length;
-      const equalTargets = WORKDAYS.reduce((acc, day) => {
+      const workdays = this.getOrderedWorkdays();
+      const hoursPerDay = this.config.value.weeklyTarget / workdays.length;
+      this.config.value.customTargets = workdays.reduce((acc, day) => {
         acc[day] = hoursPerDay;
         return acc;
       }, {} as Record<string, number>);
-      this.config.value.customTargets = equalTargets;
     }
   }
 
@@ -41,11 +44,12 @@ class DailyTargetsManager {
         if (parsedConfig.mode === 'equal') {
           parsedConfig.mode = 'custom';
           if (!parsedConfig.customTargets || Object.keys(parsedConfig.customTargets).length === 0) {
-            const hoursPerDay = parsedConfig.weeklyTarget / WORKDAYS.length;
-            parsedConfig.customTargets = WORKDAYS.reduce((acc, day) => {
+            const workdays = this.computeOrderedWorkdays(parsedConfig.startDay ?? 3, parsedConfig.weekMode ?? 'work');
+            const hoursPerDay = parsedConfig.weeklyTarget / workdays.length;
+            parsedConfig.customTargets = workdays.reduce((acc: Record<string, number>, day: string) => {
               acc[day] = hoursPerDay;
               return acc;
-            }, {} as Record<string, number>);
+            }, {});
           }
         }
         
@@ -64,11 +68,59 @@ class DailyTargetsManager {
     }
   }
 
+  // Compute ordered workday names from an explicit startDay + weekMode
+  private computeOrderedWorkdays(startDay: number, weekMode: string): string[] {
+    const result: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      const dayIndex = (startDay + i) % 7;
+      if (weekMode === 'full' || (dayIndex !== 0 && dayIndex !== 6)) {
+        result.push(ALL_WEEK_DAYS[dayIndex]);
+      }
+    }
+    return result;
+  }
+
+  // Get ordered workday names based on current config
+  private getOrderedWorkdays(): string[] {
+    return this.computeOrderedWorkdays(
+      this.config.value.startDay ?? 3,
+      this.config.value.weekMode ?? 'work'
+    );
+  }
+
+  get orderedWorkdays() {
+    return computed(() => this.getOrderedWorkdays());
+  }
+
+  get startDay() {
+    return computed(() => this.config.value.startDay ?? 3);
+  }
+
+  get weekMode() {
+    return computed(() => this.config.value.weekMode ?? ('work' as WeekMode));
+  }
+
+  get awkOffsetMinutes() {
+    return computed(() => this.config.value.awkOffsetMinutes ?? 0);
+  }
+
   private watchForChanges() {
-    watch(() => [this.config.value.mode, this.config.value.weeklyTarget, this.config.value.customTargets, this.config.value.lockedDays], () => {
-      this.config.value.lastModified = new Date();
-      this.saveToStorage();
-    }, { deep: true });
+    watch(
+      () => [
+        this.config.value.mode,
+        this.config.value.weeklyTarget,
+        this.config.value.customTargets,
+        this.config.value.lockedDays,
+        this.config.value.startDay,
+        this.config.value.weekMode,
+        this.config.value.awkOffsetMinutes,
+      ],
+      () => {
+        this.config.value.lastModified = new Date();
+        this.saveToStorage();
+      },
+      { deep: true }
+    );
   }
 
   // Computed daily targets based on current mode
@@ -79,21 +131,26 @@ class DailyTargetsManager {
   }
 
   private getCustomDistribution(): Record<string, number> {
+    const workdays = this.getOrderedWorkdays();
     // If no custom targets are set, initialize with equal distribution
     if (Object.keys(this.config.value.customTargets).length === 0) {
-      const hoursPerDay = this.config.value.weeklyTarget / WORKDAYS.length;
-      const equalTargets = WORKDAYS.reduce((acc, day) => {
+      const hoursPerDay = this.config.value.weeklyTarget / workdays.length;
+      this.config.value.customTargets = workdays.reduce((acc, day) => {
         acc[day] = hoursPerDay;
         return acc;
       }, {} as Record<string, number>);
-      this.config.value.customTargets = equalTargets;
     }
-    return { ...this.config.value.customTargets };
+    // Only return targets for current workdays so totals stay accurate
+    return workdays.reduce((acc, day) => {
+      acc[day] = this.config.value.customTargets[day] ?? 0;
+      return acc;
+    }, {} as Record<string, number>);
   }
 
   // Smart redistribution when a single day is modified
   updateDayTarget(day: string, newHours: number) {
-    if (!WORKDAYS.includes(day)) return;
+    const workdays = this.getOrderedWorkdays();
+    if (!workdays.includes(day)) return;
     
     // Don't allow updating locked days
     if (this.isLocked(day)) return;
@@ -104,7 +161,7 @@ class DailyTargetsManager {
     
     // Filter out locked days from redistribution
     const lockedDays = this.config.value.lockedDays || {};
-    const otherDays = WORKDAYS.filter(d => d !== day && !lockedDays[d]);
+    const otherDays = workdays.filter(d => d !== day && !lockedDays[d]);
 
     // Update the modified day
     currentTargets[day] = newHours;
@@ -130,6 +187,7 @@ class DailyTargetsManager {
     const currentTargets = { ...this.config.value.customTargets };
     const lockedDays = this.config.value.lockedDays || {};
     
+    const workdays = this.getOrderedWorkdays();
     // Track logged hours and updated days, including locked days for total calculation
     let totalAccountedHours = 0;
     const updatedDays: string[] = [];
@@ -140,20 +198,21 @@ class DailyTargetsManager {
       weeklyTimeData.dailyBreakdown.forEach((dayData: {date: string, hours: number}) => {
         const date = new Date(dayData.date);
         const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-        const dayName = dayNames[dayOfWeek];
+        const dayName = ALL_WEEK_DAYS[dayOfWeek];
         
         // Track all workday logged hours, even if 0
-        if (WORKDAYS.includes(dayName)) {
+        if (workdays.includes(dayName)) {
           loggedHours[dayName] = dayData.hours;
           
           if (lockedDays[dayName]) {
             // For locked days, include their current target in total accounted hours
             totalAccountedHours += currentTargets[dayName] || 0;
           } else if (dayData.hours > 0) {
-            // Only update unlocked days that have actual logged time
-            // Use exact logged hours, just ensure minimum of 5 minutes
-            const exactHours = Math.max(5/60, dayData.hours);
+            // Only update unlocked days that have actual logged time.
+            // Add the daily break & away offset so the target reflects total worked time
+            // (computer time + allowed away time), matching what the summary display shows.
+            const offsetHours = (this.config.value.awkOffsetMinutes ?? 0) / 60;
+            const exactHours = Math.max(5/60, dayData.hours + offsetHours);
             currentTargets[dayName] = exactHours;
             totalAccountedHours += exactHours;
             updatedDays.push(dayName);
@@ -163,7 +222,7 @@ class DailyTargetsManager {
     }
     
     // Account for locked days that don't have logged data
-    WORKDAYS.forEach(day => {
+    workdays.forEach(day => {
       if (lockedDays[day] && !(day in loggedHours)) {
         // This locked day has no data in the current week, include its current target
         totalAccountedHours += currentTargets[day] || 0;
@@ -174,7 +233,7 @@ class DailyTargetsManager {
     const remainingTarget = this.config.value.weeklyTarget - totalAccountedHours;
     
     // Get days that weren't updated (no logged time, not locked) and are unlocked
-    const remainingDays = WORKDAYS.filter(day => 
+    const remainingDays = workdays.filter(day => 
       !updatedDays.includes(day) && !lockedDays[day]
     );
     
@@ -199,14 +258,12 @@ class DailyTargetsManager {
   setMode(mode: DistributionMode) {
     // Since we only support 'custom' mode now, always ensure custom targets are initialized
     if (Object.keys(this.config.value.customTargets).length === 0) {
-      // Initialize custom targets with equal distribution calculation
-      const hoursPerDay = this.config.value.weeklyTarget / WORKDAYS.length;
-      const equalTargets = WORKDAYS.reduce((acc, day) => {
+      const workdays = this.getOrderedWorkdays();
+      const hoursPerDay = this.config.value.weeklyTarget / workdays.length;
+      this.config.value.customTargets = workdays.reduce((acc, day) => {
         acc[day] = hoursPerDay;
         return acc;
       }, {} as Record<string, number>);
-      
-      this.config.value.customTargets = equalTargets;
     }
     this.config.value.mode = mode;
   }
@@ -216,12 +273,13 @@ class DailyTargetsManager {
     this.config.value.weeklyTarget = hours;
     
     // Keep existing distribution ratios in custom mode
+    const workdays = this.getOrderedWorkdays();
     const currentTargets = { ...this.config.value.customTargets };
-    const currentTotal = Object.values(currentTargets).reduce((sum, h) => sum + h, 0);
+    const currentTotal = workdays.reduce((sum, day) => sum + (currentTargets[day] || 0), 0);
     
     if (currentTotal > 0) {
       const scaleFactor = hours / currentTotal;
-      WORKDAYS.forEach(day => {
+      workdays.forEach(day => {
         if (currentTargets[day]) {
           currentTargets[day] *= scaleFactor;
         }
@@ -230,17 +288,45 @@ class DailyTargetsManager {
     }
   }
 
+  // Set the start day of the week (0 = Sunday ... 6 = Saturday)
+  setStartDay(day: number) {
+    this.config.value.startDay = day;
+    this.ensureAllWorkdaysHaveTargets();
+  }
+
+  // Set the week mode ('work' = weekdays only, 'full' = all 7 days)
+  setWeekMode(mode: WeekMode) {
+    this.config.value.weekMode = mode;
+    this.ensureAllWorkdaysHaveTargets();
+  }
+
+  // Set the daily AWK offset in minutes (away-from-keyboard time that still counts as work)
+  setAwkOffset(minutes: number) {
+    this.config.value.awkOffsetMinutes = Math.max(0, Math.round(minutes));
+  }
+
+  // Ensure any newly added workdays get a default target
+  private ensureAllWorkdaysHaveTargets() {
+    const workdays = this.getOrderedWorkdays();
+    const avgTarget = this.config.value.weeklyTarget / workdays.length;
+    const targets = { ...this.config.value.customTargets };
+    workdays.forEach(day => {
+      if (!targets[day]) {
+        targets[day] = Math.round(avgTarget * 12) / 12; // Round to 5-min increments
+      }
+    });
+    this.config.value.customTargets = targets;
+  }
+
   // Get daily target for a specific date string
   getDailyTargetForDate(dateStr: string): number {
     const date = new Date(dateStr);
     const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const dayName = ALL_WEEK_DAYS[dayOfWeek];
+    const workdays = this.getOrderedWorkdays();
     
-    // Convert to our day names
-    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const dayName = dayNames[dayOfWeek];
-    
-    if (!WORKDAYS.includes(dayName)) {
-      return 0; // No target for weekends
+    if (!workdays.includes(dayName)) {
+      return 0; // No target for this day
     }
     
     return this.dailyTargets.value[dayName] || 0;
@@ -269,6 +355,7 @@ class DailyTargetsManager {
 
   // Apply equal distribution preset
   applyEqualPreset() {
+    const workdays = this.getOrderedWorkdays();
     const currentTargets = { ...this.config.value.customTargets };
     const lockedDays = this.config.value.lockedDays || {};
     
@@ -276,7 +363,7 @@ class DailyTargetsManager {
     let lockedTotal = 0;
     const unlockedDays: string[] = [];
     
-    WORKDAYS.forEach(day => {
+    workdays.forEach(day => {
       if (lockedDays[day]) {
         lockedTotal += currentTargets[day] || 0;
       } else {
@@ -336,12 +423,19 @@ export function useDailyTargets() {
     weeklyTotal: dailyTargetsManager.weeklyTotal,
     isWeeklyTargetMet: dailyTargetsManager.isWeeklyTargetMet,
     lockedDays: dailyTargetsManager.lockedDays,
-    
+    orderedWorkdays: dailyTargetsManager.orderedWorkdays,
+    startDay: dailyTargetsManager.startDay,
+    weekMode: dailyTargetsManager.weekMode,
+    awkOffsetMinutes: dailyTargetsManager.awkOffsetMinutes,
+
     // Methods
     updateDayTarget: (day: string, hours: number) => dailyTargetsManager.updateDayTarget(day, hours),
     setFromLoggedData: (weeklyTimeData: any) => dailyTargetsManager.setFromLoggedData(weeklyTimeData),
     setMode: (mode: DistributionMode) => dailyTargetsManager.setMode(mode),
     setWeeklyTarget: (hours: number) => dailyTargetsManager.setWeeklyTarget(hours),
+    setStartDay: (day: number) => dailyTargetsManager.setStartDay(day),
+    setWeekMode: (mode: WeekMode) => dailyTargetsManager.setWeekMode(mode),
+    setAwkOffset: (minutes: number) => dailyTargetsManager.setAwkOffset(minutes),
     getDailyTargetForDate: (dateStr: string) => dailyTargetsManager.getDailyTargetForDate(dateStr),
     applyEqualPreset: () => dailyTargetsManager.applyEqualPreset(),
     isLocked: (day: string) => dailyTargetsManager.isLocked(day),

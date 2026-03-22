@@ -1,7 +1,7 @@
 <template>
   <div class="week-view">
     <h2 class="week-title">Weekly Time Tracking</h2>
-    <p class="week-subtitle">Wednesday to Tuesday work week</p>
+    <p class="week-subtitle">{{ subtitle }}</p>
     <div class="week-range">
       <span class="date-range">
         {{ formatDate(weekStart) }} - {{ formatDate(weekEnd) }}
@@ -15,6 +15,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 
 interface Props {
   weekStart: Date;
@@ -27,6 +28,13 @@ interface Emits {
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
+
+const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const subtitle = computed(() => {
+  const startName = DAY_NAMES[props.weekStart.getDay()];
+  const endName   = DAY_NAMES[props.weekEnd.getDay()];
+  return `${startName} to ${endName}`;
+});
 
 const formatDate = (date: Date): string => {
   return date.toLocaleDateString('en-US', {

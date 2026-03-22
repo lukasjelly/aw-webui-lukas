@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import WeekView from './components/WeekView.vue';
 import HoursSummary from './components/HoursSummary.vue';
 import TimelineModal from './components/TimelineModal.vue';
@@ -15,7 +15,7 @@ const error = ref<string>('');
 const connectionStatus = ref<'connected' | 'disconnected' | 'checking'>('checking');
 
 // Get the weekly target from the composable
-const { weeklyTarget: composableWeeklyTarget } = useDailyTargets();
+const { weeklyTarget: composableWeeklyTarget, startDay } = useDailyTargets();
 
 // Convert composable target to the format expected by HoursSummary
 const weeklyTarget = computed<WeeklyTarget>(() => {
@@ -37,51 +37,31 @@ const selectedDate = ref<Date | null>(null);
 // Settings modal state
 const isSettingsModalOpen = ref(false);
 
-// Calculate current week (Wednesday to Tuesday)
+// Calculate current week based on the configured start day
 const getCurrentWeek = (): { start: Date; end: Date } => {
   const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
-  
-  // Find the most recent Wednesday (or current day if it's Wednesday)
-  let daysToSubtract;
-  switch (dayOfWeek) {
-    case 0: // Sunday - go back 4 days to Wednesday
-      daysToSubtract = 4;
-      break;
-    case 1: // Monday - go back 5 days to Wednesday
-      daysToSubtract = 5;
-      break;
-    case 2: // Tuesday - go back 6 days to Wednesday
-      daysToSubtract = 6;
-      break;
-    case 3: // Wednesday - this is the start (0 days back)
-      daysToSubtract = 0;
-      break;
-    case 4: // Thursday - go back 1 day to Wednesday
-      daysToSubtract = 1;
-      break;
-    case 5: // Friday - go back 2 days to Wednesday
-      daysToSubtract = 2;
-      break;
-    case 6: // Saturday - go back 3 days to Wednesday
-      daysToSubtract = 3;
-      break;
-    default:
-      daysToSubtract = 0;
-  }
-  
+  const dayOfWeek = today.getDay(); // 0 = Sunday ... 6 = Saturday
+  const sd = startDay.value;        // configured start day
+  const daysToSubtract = (dayOfWeek - sd + 7) % 7;
+
   const weekStart = new Date(today);
   weekStart.setDate(today.getDate() - daysToSubtract);
   weekStart.setHours(0, 0, 0, 0);
-  
+
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
   weekEnd.setHours(23, 59, 59, 999);
-  
+
   return { start: weekStart, end: weekEnd };
 };
 
 const currentWeek = ref(getCurrentWeek());
+
+// Recompute current week whenever the start day setting changes
+watch(startDay, () => {
+  currentWeek.value = getCurrentWeek();
+  loadTimeData();
+});
 
 const loadTimeData = async (isAutoRefresh = false) => {
   // Don't show loading spinner for auto-refresh to avoid UI flickering

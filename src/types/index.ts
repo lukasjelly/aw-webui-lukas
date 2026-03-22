@@ -38,6 +38,7 @@ export interface WeeklyTarget {
   minutes: number;
 }
 
+export type WeekMode = 'work' | 'full';
 export type DistributionMode = 'custom';
 
 export interface DailyTarget {
@@ -50,6 +51,9 @@ export interface DailyTargetsConfig {
   customTargets: Record<string, number>; // { monday: 7, tuesday: 6.5, etc. }
   weeklyTarget: number;
   lockedDays: Record<string, boolean>; // { monday: true, tuesday: false, etc. }
+  startDay: number;          // 0 = Sunday ... 6 = Saturday
+  weekMode: WeekMode;         // 'work' = weekdays only, 'full' = all 7 days
+  awkOffsetMinutes: number;   // minutes of away-from-keyboard time to add per worked day
   lastModified: Date;
 }
 
