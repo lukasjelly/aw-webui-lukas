@@ -228,6 +228,7 @@ class AwServerApi {
         // Use the same method as timeline for consistency
         const dayData = await this.getDayTimelineData(currentDate);
         const dayHours = dayData.totalActiveSeconds / 3600;
+        const dayInactiveHours = dayData.totalInactiveSeconds / 3600;
 
         // Use local date string to avoid timezone issues
         const localDateString = currentDate.getFullYear() + '-' + 
@@ -237,6 +238,7 @@ class AwServerApi {
         dailyBreakdown.push({
           date: localDateString,
           hours: Math.round(dayHours * 100) / 100,
+          inactiveHours: Math.round(dayInactiveHours * 100) / 100,
         });
 
         totalHours += dayHours;

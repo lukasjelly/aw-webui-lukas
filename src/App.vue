@@ -62,8 +62,6 @@ const isCurrentWeek = computed(() => {
   return currentWeek.value.start.getTime() === actual.start.getTime();
 });
 
-const todayHighlightKey = ref(0);
-
 // Recompute current week whenever the start day setting changes
 watch(startDay, () => {
   currentWeek.value = getCurrentWeek();
@@ -113,7 +111,6 @@ const onWeekChanged = (start: Date, end: Date) => {
 
 const goToToday = () => {
   currentWeek.value = getCurrentWeek();
-  todayHighlightKey.value++;
   loadTimeData();
 };
 
@@ -206,7 +203,7 @@ onUnmounted(() => {
         :error="error"
         :target="weeklyTarget"
         :last-update-time="lastUpdateTime"
-        :today-highlight-key="todayHighlightKey"
+        :is-current-week="isCurrentWeek"
         @retry="retryLoad"
         @open-timeline="openTimeline"
         @manual-refresh="retryLoad"

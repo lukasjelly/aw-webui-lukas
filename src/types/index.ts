@@ -30,6 +30,7 @@ export interface WeeklyTimeData {
   dailyBreakdown: {
     date: string;
     hours: number;
+    inactiveHours: number;
   }[];
 }
 

@@ -45,11 +45,11 @@
             </div>
             <div class="hours-bar">
               <div class="hours-fill" 
-                   :style="{ height: `${getBarHeight(day.hours, day.date)}%` }"
-                   :class="{ 'target-met': isDailyTargetMet(day.hours, day.date), 'below-target': !isDailyTargetMet(day.hours, day.date) }"></div>
+                   :style="{ height: `${getBarHeight(day.hours, day.date, day.inactiveHours)}%` }"
+                   :class="{ 'target-met': isDailyTargetMet(day.hours, day.date, day.inactiveHours), 'below-target': !isDailyTargetMet(day.hours, day.date, day.inactiveHours) }"></div>
             </div>
-            <div class="day-hours" :class="{ 'target-met': isDailyTargetMet(day.hours, day.date), 'below-target': !isDailyTargetMet(day.hours, day.date) }">
-              {{ formatHoursMinutes(getAdjustedHours(day.hours)) }}
+            <div class="day-hours" :class="{ 'target-met': isDailyTargetMet(day.hours, day.date, day.inactiveHours), 'below-target': !isDailyTargetMet(day.hours, day.date, day.inactiveHours) }">
+              {{ formatHoursMinutes(getAdjustedHours(day.hours, day.inactiveHours)) }}
               <div class="day-target">
                 <span v-if="hasTargetForDate(day.date)">Target: {{ getDailyTargetText(day.date) }}</span>
                 <span v-else>&nbsp;</span>
@@ -77,7 +77,7 @@ interface Props {
   error?: string;
   target?: WeeklyTarget;
   lastUpdateTime?: Date | null;
-  todayHighlightKey?: number;
+  isCurrentWeek?: boolean;
 }
 
 interface Emits {
@@ -101,8 +101,8 @@ const todayDateStr = (() => {
 
 const animatingToday = ref(false);
 
-watch(() => props.todayHighlightKey, (newVal, oldVal) => {
-  if (newVal !== undefined && oldVal !== undefined && newVal !== oldVal) {
+watch(() => props.loading, (isLoading, wasLoading) => {
+  if (wasLoading && !isLoading && props.isCurrentWeek) {
     animatingToday.value = false;
     requestAnimationFrame(() => {
       animatingToday.value = true;
@@ -120,17 +120,20 @@ const filteredDailyBreakdown = computed(() => {
   });
 });
 
-const getAdjustedHours = (rawHours: number): number => {
-  return rawHours > 0 ? rawHours + awkOffsetMinutes.value / 60 : rawHours;
+const getAdjustedHours = (rawHours: number, inactiveHours: number = 0): number => {
+  if (rawHours <= 0) return rawHours;
+  const budgetHours = awkOffsetMinutes.value / 60;
+  const usedBreak = Math.min(inactiveHours, budgetHours);
+  return rawHours + usedBreak;
 };
 
 const adjustedTotalHours = computed(() => {
-  return filteredDailyBreakdown.value.reduce((sum, day) => sum + getAdjustedHours(day.hours), 0);
+  return filteredDailyBreakdown.value.reduce((sum, day) => sum + getAdjustedHours(day.hours, day.inactiveHours), 0);
 });
 
 const maxHours = computed(() => {
   if (!filteredDailyBreakdown.value.length) return 8;
-  return Math.max(...filteredDailyBreakdown.value.map(d => getAdjustedHours(d.hours)), 8);
+  return Math.max(...filteredDailyBreakdown.value.map(d => getAdjustedHours(d.hours, d.inactiveHours)), 8);
 });
 
 const targetTotalHours = computed(() => {
@@ -209,8 +212,8 @@ const hasTargetForDate = (dateStr: string): boolean => {
   return getDailyTargetForDate(dateStr) > 0;
 };
 
-const getBarHeight = (rawHours: number, dateStr: string): number => {
-  const hours = getAdjustedHours(rawHours);
+const getBarHeight = (rawHours: number, dateStr: string, inactiveHours: number = 0): number => {
+  const hours = getAdjustedHours(rawHours, inactiveHours);
   if (!hasTargetForDate(dateStr)) {
     return (hours / maxHours.value) * 100;
   }
@@ -218,11 +221,11 @@ const getBarHeight = (rawHours: number, dateStr: string): number => {
   return Math.min((hours / dailyTarget) * 100, 100);
 };
 
-const isDailyTargetMet = (rawHours: number, dateStr: string): boolean => {
+const isDailyTargetMet = (rawHours: number, dateStr: string, inactiveHours: number = 0): boolean => {
   if (!hasTargetForDate(dateStr)) {
     return true;
   }
-  const hours = getAdjustedHours(rawHours);
+  const hours = getAdjustedHours(rawHours, inactiveHours);
   const dailyTarget = getDailyTargetForDate(dateStr);
   const roundedHours = Math.round(hours * 1000) / 1000;
   const roundedTarget = Math.round(dailyTarget * 1000) / 1000;
@@ -495,12 +498,15 @@ const openTimeline = (dateStr: string) => {
 }
 
 @keyframes todayFade {
-  0%   { box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.7); background: rgba(39, 174, 96, 0.15); }
+  0%   { box-shadow: none; background: transparent; }
+  15%  { box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.7); background: rgba(39, 174, 96, 0.15); }
+  35%  { box-shadow: none; background: transparent; }
+  50%  { box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.5); background: rgba(39, 174, 96, 0.1); }
   100% { box-shadow: none; background: transparent; }
 }
 
 .day-item.today-animate {
-  animation: todayFade 2.5s ease-out forwards;
+  animation: todayFade 2.2s ease-in-out 1s forwards;
 }
 
 .day-info {
