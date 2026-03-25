@@ -57,6 +57,13 @@ const getCurrentWeek = (): { start: Date; end: Date } => {
 
 const currentWeek = ref(getCurrentWeek());
 
+const isCurrentWeek = computed(() => {
+  const actual = getCurrentWeek();
+  return currentWeek.value.start.getTime() === actual.start.getTime();
+});
+
+const todayHighlightKey = ref(0);
+
 // Recompute current week whenever the start day setting changes
 watch(startDay, () => {
   currentWeek.value = getCurrentWeek();
@@ -101,6 +108,12 @@ const loadTimeData = async (isAutoRefresh = false) => {
 
 const onWeekChanged = (start: Date, end: Date) => {
   currentWeek.value = { start, end };
+  loadTimeData();
+};
+
+const goToToday = () => {
+  currentWeek.value = getCurrentWeek();
+  todayHighlightKey.value++;
   loadTimeData();
 };
 
@@ -182,7 +195,9 @@ onUnmounted(() => {
       <WeekView 
         :week-start="currentWeek.start"
         :week-end="currentWeek.end"
+        :is-current-week="isCurrentWeek"
         @week-changed="onWeekChanged"
+        @go-to-today="goToToday"
       />
       
       <HoursSummary 
@@ -191,6 +206,7 @@ onUnmounted(() => {
         :error="error"
         :target="weeklyTarget"
         :last-update-time="lastUpdateTime"
+        :today-highlight-key="todayHighlightKey"
         @retry="retryLoad"
         @open-timeline="openTimeline"
         @manual-refresh="retryLoad"

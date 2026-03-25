@@ -8,6 +8,7 @@
       </span>
       <div class="week-navigation">
         <button @click="previousWeek" class="nav-btn">← Previous Week</button>
+        <button v-if="!isCurrentWeek" @click="goToToday" class="nav-btn today-btn">Today</button>
         <button @click="nextWeek" class="nav-btn">Next Week →</button>
       </div>
     </div>
@@ -20,10 +21,12 @@ import { computed } from 'vue';
 interface Props {
   weekStart: Date;
   weekEnd: Date;
+  isCurrentWeek?: boolean;
 }
 
 interface Emits {
   (e: 'week-changed', start: Date, end: Date): void;
+  (e: 'go-to-today'): void;
 }
 
 const props = defineProps<Props>();
@@ -58,6 +61,10 @@ const nextWeek = () => {
   const newEnd = new Date(props.weekEnd);
   newEnd.setDate(newEnd.getDate() + 7);
   emit('week-changed', newStart, newEnd);
+};
+
+const goToToday = () => {
+  emit('go-to-today');
 };
 </script>
 
@@ -120,6 +127,14 @@ const nextWeek = () => {
 
 .nav-btn:active {
   transform: translateY(1px);
+}
+
+.today-btn {
+  background: #27ae60;
+}
+
+.today-btn:hover {
+  background: #219a52;
 }
 
 @media (max-width: 600px) {

@@ -37,6 +37,7 @@
         <h4>Daily Breakdown <span class="clickable-hint">(Click on any day for timeline)</span></h4>
         <div class="daily-grid">
           <div v-for="day in filteredDailyBreakdown" :key="day.date" class="day-item" @click="openTimeline(day.date)"
+            :class="{ 'is-today': day.date === todayDateStr, 'today-animate': day.date === todayDateStr && animatingToday }"
             :title="`Click to view timeline for ${formatDayName(day.date)}, ${formatDayDate(day.date)}`">
             <div class="day-info">
               <div class="day-name">{{ formatDayName(day.date) }}</div>
@@ -66,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { WeeklyTimeData, WeeklyTarget } from '../types';
 import { useDailyTargets } from '../composables/useDailyTargets';
 
@@ -76,6 +77,7 @@ interface Props {
   error?: string;
   target?: WeeklyTarget;
   lastUpdateTime?: Date | null;
+  todayHighlightKey?: number;
 }
 
 interface Emits {
@@ -91,6 +93,22 @@ const emit = defineEmits<Emits>();
 
 // Initialize daily targets composable
 const { getDailyTargetForDate: getComposableDailyTarget, weeklyTarget, weekMode, awkOffsetMinutes } = useDailyTargets();
+
+const todayDateStr = (() => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+})();
+
+const animatingToday = ref(false);
+
+watch(() => props.todayHighlightKey, (newVal, oldVal) => {
+  if (newVal !== undefined && oldVal !== undefined && newVal !== oldVal) {
+    animatingToday.value = false;
+    requestAnimationFrame(() => {
+      animatingToday.value = true;
+    });
+  }
+});
 
 const filteredDailyBreakdown = computed(() => {
   if (!props.timeData?.dailyBreakdown) return [];
@@ -470,6 +488,19 @@ const openTimeline = (dateStr: string) => {
 
 .day-item:active {
   transform: translateY(0);
+}
+
+.day-item.is-today {
+  border: 1px solid rgba(39, 174, 96, 0.35);
+}
+
+@keyframes todayFade {
+  0%   { box-shadow: 0 0 0 3px rgba(39, 174, 96, 0.7); background: rgba(39, 174, 96, 0.15); }
+  100% { box-shadow: none; background: transparent; }
+}
+
+.day-item.today-animate {
+  animation: todayFade 2.5s ease-out forwards;
 }
 
 .day-info {
