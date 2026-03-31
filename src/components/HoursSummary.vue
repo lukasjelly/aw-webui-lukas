@@ -67,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue';
 import type { WeeklyTimeData, WeeklyTarget } from '../types';
 import { useDailyTargets } from '../composables/useDailyTargets';
 
@@ -94,10 +94,32 @@ const emit = defineEmits<Emits>();
 // Initialize daily targets composable
 const { getDailyTargetForDate: getComposableDailyTarget, weeklyTarget, weekMode, awkOffsetMinutes } = useDailyTargets();
 
-const todayDateStr = (() => {
+const getTodayDateStr = (): string => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-})();
+};
+
+const todayDateStr = ref<string>(getTodayDateStr());
+
+let midnightTimer: ReturnType<typeof setTimeout> | null = null;
+
+const scheduleMidnightUpdate = () => {
+  const now = new Date();
+  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  const msUntilMidnight = tomorrow.getTime() - now.getTime();
+  midnightTimer = setTimeout(() => {
+    todayDateStr.value = getTodayDateStr();
+    scheduleMidnightUpdate();
+  }, msUntilMidnight);
+};
+
+onMounted(() => {
+  scheduleMidnightUpdate();
+});
+
+onUnmounted(() => {
+  if (midnightTimer !== null) clearTimeout(midnightTimer);
+});
 
 const animatingToday = ref(false);
 
